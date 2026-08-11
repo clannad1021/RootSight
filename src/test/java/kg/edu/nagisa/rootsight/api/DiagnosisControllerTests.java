@@ -1,6 +1,9 @@
 package kg.edu.nagisa.rootsight.api;
 
 import kg.edu.nagisa.rootsight.agent.DiagnosisService;
+import kg.edu.nagisa.rootsight.agent.model.DiagnosisResult;
+import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
+import kg.edu.nagisa.rootsight.common.constant.ExceptionMessages;
 import kg.edu.nagisa.rootsight.common.exception.DiagnosisUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +20,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
+
 @WebMvcTest(DiagnosisController.class)
 class DiagnosisControllerTests {
 
@@ -28,18 +33,22 @@ class DiagnosisControllerTests {
 
     @Test
     void shouldReturnModelAnswer() throws Exception {
-        given(diagnosisService.diagnose("ShortPan 为什么变慢了？"))
-                .willReturn("当前阶段尚未接入真实指标，需要先采集延迟和日志证据。");
+        given(diagnosisService.diagnose("订单服务为什么变慢了？"))
+                .willReturn(new DiagnosisResult(
+                        "演示证据显示 Redis 不可用导致请求回源，延迟因此升高。",
+                        List.of(new ToolCallTrace("check_redis_health", "Redis 状态=DOWN"))
+                ));
 
         mockMvc.perform(post("/api/diagnoses")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"question":"ShortPan 为什么变慢了？"}
+                                {"question":"订单服务为什么变慢了？"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.answer")
-                        .value("当前阶段尚未接入真实指标，需要先采集延迟和日志证据。"));
+                        .value("演示证据显示 Redis 不可用导致请求回源，延迟因此升高。"))
+                .andExpect(jsonPath("$.toolCalls[0].toolName").value("check_redis_health"));
     }
 
     @Test
@@ -50,8 +59,8 @@ class DiagnosisControllerTests {
                                 {"question":"   "}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("请求校验失败"))
-                .andExpect(jsonPath("$.detail").value("问题不能为空"));
+                .andExpect(jsonPath("$.title").value(ExceptionMessages.VALIDATION_FAILED_TITLE))
+                .andExpect(jsonPath("$.detail").value(ExceptionMessages.QUESTION_REQUIRED));
 
         verifyNoInteractions(diagnosisService);
     }
@@ -59,15 +68,15 @@ class DiagnosisControllerTests {
     @Test
     void shouldReturnBadGatewayWithoutLeakingProviderFailure() throws Exception {
         given(diagnosisService.diagnose(anyString()))
-                .willThrow(new DiagnosisUnavailableException("DeepSeek 暂时无法完成诊断"));
+                .willThrow(new DiagnosisUnavailableException(ExceptionMessages.MODEL_DIAGNOSIS_UNAVAILABLE));
 
         mockMvc.perform(post("/api/diagnoses")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"question":"检查 ShortPan"}
+                                {"question":"检查目标服务"}
                                 """))
                 .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.title").value("诊断服务暂时不可用"))
-                .andExpect(jsonPath("$.detail").value("DeepSeek 暂时无法完成诊断"));
+                .andExpect(jsonPath("$.title").value(ExceptionMessages.DIAGNOSIS_UNAVAILABLE_TITLE))
+                .andExpect(jsonPath("$.detail").value(ExceptionMessages.MODEL_DIAGNOSIS_UNAVAILABLE));
     }
 }

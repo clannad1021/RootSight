@@ -21,5 +21,5 @@ spring:
         temperature: ${DEEPSEEK_CHAT_TEMPERATURE:0.2}
 
 server:
-  # 与默认运行在 8080 的 ShortPan 错开，两个独立服务可以同时启动。
+  # 使用独立端口，避免与常见的 8080 业务服务端口冲突。
   port: ${ROOTSIGHT_SERVER_PORT:8081}

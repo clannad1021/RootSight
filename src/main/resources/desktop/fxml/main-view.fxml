@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="kg.edu.nagisa.rootsight.desktop.controller.MainViewController"
+            stylesheets="@../css/rootsight.css"
+            styleClass="app-root">
+    <left>
+        <StackPane prefWidth="326.0" minWidth="292.0" styleClass="hero-panel">
+            <Region styleClass="hero-overlay"/>
+            <VBox spacing="12.0" styleClass="hero-content">
+                <VBox spacing="5.0">
+                    <Label text="ROOTSIGHT" styleClass="brand-title"/>
+                    <Label text="UNIVERSAL DIAGNOSIS TERMINAL" styleClass="brand-caption"/>
+                </VBox>
+                <Region VBox.vgrow="ALWAYS"/>
+                <VBox spacing="9.0" styleClass="hero-copy-card">
+                    <Label text="HOSHINO CALM MODE" styleClass="hero-kicker"/>
+                    <Label text="让 Agent 主动找证据，&#10;你只需要描述现象。"
+                           wrapText="true" styleClass="hero-heading"/>
+                    <Label text="ARONA + PLANA / ONLINE" styleClass="hero-status"/>
+                </VBox>
+            </VBox>
+        </StackPane>
+    </left>
+
+    <center>
+        <BorderPane styleClass="workspace">
+            <top>
+                <HBox alignment="CENTER_LEFT" spacing="14.0" styleClass="top-bar">
+                    <VBox spacing="3.0">
+                        <Label text="诊断控制台" styleClass="page-title"/>
+                        <Label text="OBSERVE · REASON · EXPLAIN" styleClass="page-subtitle"/>
+                    </VBox>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label text="●  AGENT READY" styleClass="agent-ready"/>
+                    <Button text="设置" onAction="#openSettings" styleClass="settings-button"/>
+                </HBox>
+            </top>
+
+            <center>
+                <ScrollPane fitToWidth="true" hbarPolicy="NEVER" styleClass="main-scroll">
+                    <content>
+                        <VBox spacing="18.0" styleClass="content-column">
+                            <VBox spacing="12.0" styleClass="diagnosis-card">
+                                <HBox alignment="CENTER_LEFT">
+                                    <VBox spacing="3.0">
+                                        <Label text="故障描述" styleClass="section-title"/>
+                                        <Label text="告诉 RootSight 发生了什么，Agent 会自行决定需要哪些证据。"
+                                               styleClass="section-caption"/>
+                                    </VBox>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label text="CTRL + ENTER" styleClass="shortcut-chip"/>
+                                </HBox>
+
+                                <TextArea fx:id="questionInput"
+                                          promptText="例如：order-service 最近响应很慢，请主动收集证据并诊断根因。"
+                                          prefRowCount="5" wrapText="true" styleClass="question-input"/>
+
+                                <HBox spacing="9.0" alignment="CENTER_LEFT">
+                                    <Label text="快速示例" styleClass="quick-label"/>
+                                    <Button text="延迟升高" onAction="#useLatencyPrompt" styleClass="quick-button"/>
+                                    <Button text="错误率异常" onAction="#useErrorPrompt" styleClass="quick-button"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <ProgressIndicator fx:id="diagnosisProgress" visible="false" managed="false"
+                                                       prefWidth="22.0" prefHeight="22.0"/>
+                                    <Button fx:id="diagnoseButton" text="开始诊断  ↗"
+                                            onAction="#handleDiagnose" styleClass="primary-button"/>
+                                </HBox>
+                            </VBox>
+
+                            <VBox spacing="12.0" styleClass="answer-card">
+                                <HBox alignment="CENTER_LEFT" spacing="10.0">
+                                    <Label text="AI 诊断报告" styleClass="section-title"/>
+                                    <Label fx:id="statusLabel" text="等待诊断任务" styleClass="status-chip"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="lastRunLabel" text="尚未运行" styleClass="last-run"/>
+                                </HBox>
+                                <Separator styleClass="soft-separator"/>
+                                <TextArea fx:id="answerOutput" editable="false" wrapText="true"
+                                          prefHeight="340.0" styleClass="answer-output"/>
+                            </VBox>
+                        </VBox>
+                    </content>
+                </ScrollPane>
+            </center>
+
+            <right>
+                <VBox prefWidth="330.0" minWidth="292.0" spacing="14.0" styleClass="trace-panel">
+                    <VBox spacing="4.0">
+                        <Label text="证据轨迹" styleClass="trace-panel-title"/>
+                        <Label text="TOOL EXECUTION TIMELINE" styleClass="trace-panel-caption"/>
+                    </VBox>
+                    <Label text="只有真正执行过的 Tool 才会出现在这里。"
+                           wrapText="true" styleClass="trace-hint"/>
+                    <ScrollPane fitToWidth="true" hbarPolicy="NEVER" VBox.vgrow="ALWAYS"
+                                styleClass="trace-scroll">
+                        <content>
+                            <VBox fx:id="traceContainer" spacing="10.0"/>
+                        </content>
+                    </ScrollPane>
+                    <VBox spacing="6.0" styleClass="guide-card">
+                        <Label text="PLANA NOTE" styleClass="guide-kicker"/>
+                        <Label text="实时指标、日志与中间件 Tool 会在后续阶段逐步替换当前演示证据。"
+                               wrapText="true" styleClass="guide-text"/>
+                    </VBox>
+                </VBox>
+            </right>
+        </BorderPane>
+    </center>
+</BorderPane>

@@ -29,6 +29,8 @@
     <properties>
         <java.version>17</java.version>
         <spring-ai.version>2.0.0</spring-ai.version>
+        <!-- JavaFX 21 LTS 是当前仍兼容 JDK 17 的维护线。 -->
+        <javafx.version>21.0.12</javafx.version>
     </properties>
     <dependencies>
         <dependency>
@@ -46,6 +48,23 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-deepseek</artifactId>
+        </dependency>
+        <!-- Lombok 只在编译期生成构造方法，避免重复编写依赖注入样板代码。 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- JavaFX 桌面客户端：Controls 提供控件，FXML 负责把布局与 Java 逻辑隔离。 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
         </dependency>
 
         <dependency>
@@ -81,6 +100,18 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 工程现在有后端与桌面两个入口，显式指定后端入口避免 repackage 选择歧义。 -->
+                    <mainClass>kg.edu.nagisa.rootsight.RootSightApplication</mainClass>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>kg.edu.nagisa.rootsight.desktop.RootSightDesktopLauncher</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>
