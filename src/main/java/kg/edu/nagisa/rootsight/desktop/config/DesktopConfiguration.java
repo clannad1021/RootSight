@@ -2,9 +2,8 @@ package kg.edu.nagisa.rootsight.desktop.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 
 /**
  * 桌面客户端专用基础设施配置。
@@ -13,14 +12,10 @@ import java.util.concurrent.Executors;
 public class DesktopConfiguration {
 
     /**
-     * 创建单线程后台执行器，避免同步模型调用阻塞 JavaFX UI 线程。
+     * 创建桌面诊断专用调度器，保证订阅和流式回调不会占用 JavaFX UI 线程。
      */
-    @Bean(destroyMethod = "shutdown")
-    public ExecutorService desktopTaskExecutor() {
-        return Executors.newSingleThreadExecutor(task -> {
-            Thread thread = new Thread(task, "rootsight-desktop-diagnosis");
-            thread.setDaemon(true);
-            return thread;
-        });
+    @Bean(destroyMethod = "dispose")
+    public Scheduler desktopTaskScheduler() {
+        return Schedulers.newSingle("rootsight-desktop-diagnosis", true);
     }
 }

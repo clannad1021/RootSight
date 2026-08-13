@@ -17,4 +17,9 @@ public class ExceptionMessages {
     public static final String EMPTY_MODEL_RESPONSE = "模型返回了空回答";
     public static final String MODEL_DIAGNOSIS_UNAVAILABLE = "AI 模型暂时无法完成诊断";
     public static final String DIAGNOSIS_UNAVAILABLE_TITLE = "诊断服务暂时不可用";
+    public static final String DIAGNOSIS_CONTEXT_MISSING = "诊断 Tool 缺少请求上下文";
+    public static final String DIAGNOSIS_TRACE_NOT_FOUND = "诊断 Tool 对应的轨迹会话不存在";
+    public static final String MYSQL_INSPECTION_FAILED = "MySQL 连接或状态查询失败";
+    public static final String REDIS_INSPECTION_FAILED = "Redis 连接或状态查询失败";
+    public static final String REDIS_INFO_UNAVAILABLE = "Redis PING 成功，但当前账号无权读取 INFO 指标";
 }

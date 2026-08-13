@@ -1,16 +1,22 @@
 package kg.edu.nagisa.rootsight.agent;
 
-import kg.edu.nagisa.rootsight.agent.model.DiagnosisResult;
+import kg.edu.nagisa.rootsight.agent.format.DiagnosisAnswerFormatter;
+import kg.edu.nagisa.rootsight.agent.model.DiagnosisStreamEvent;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
 import kg.edu.nagisa.rootsight.common.constant.ExceptionMessages;
-import kg.edu.nagisa.rootsight.common.exception.DiagnosisUnavailableException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 诊断应用服务，负责启动一次 Agent 调用并收集该次调用产生的 Tool 轨迹。
+ * 诊断应用服务，负责启动流式 Agent 调用并收集该次调用产生的 Tool 轨迹。
  */
 @Service
 @RequiredArgsConstructor
@@ -18,37 +24,65 @@ public class DiagnosisService {
 
     private final ChatClient diagnosisChatClient;
     private final ToolCallTraceRecorder traceRecorder;
+    private final DiagnosisAnswerFormatter answerFormatter;
 
     /**
-     * 根据用户描述执行一次完整诊断。
+     * 根据用户描述执行流式诊断，并按模型生成进度持续返回纯文本内容。
      *
-     * <p>当前阶段由 ChatClient 自动处理“模型选择 Tool → Java 执行 Tool → 结果返回模型”的循环，
-     * 同时记录工具轨迹，便于调用方观察模型实际取过哪些证据。</p>
+     * <p>每个订阅都会创建独立诊断 ID，并通过 ToolContext 传给实际执行的 Tool。
+     * 最后一个 COMPLETED 事件再携带本次完整轨迹，保证正文流不会因等待全部回答而阻塞。</p>
      *
      * @param question 用户描述的故障现象
-     * @return 模型回答以及本次调用产生的 Tool 执行轨迹
+     * @return 包含增量正文、完成状态或安全错误消息的事件流
      */
-    public DiagnosisResult diagnose(String question) {
-        traceRecorder.start();
-        try {
-            // 创建用户消息并发起同步调用；ToolCallingAdvisor 会在内部继续执行模型请求，直到模型给出最终回答。
-            String answer = diagnosisChatClient.prompt()
-                    .user(question)
-                    .call()
-                    .content();
+    public Flux<DiagnosisStreamEvent> diagnoseStream(String question) {
+        return Flux.defer(() -> createDiagnosisStream(question));
+    }
 
-            if (!StringUtils.hasText(answer)) {
-                throw new DiagnosisUnavailableException(ExceptionMessages.EMPTY_MODEL_RESPONSE);
+    /**
+     * 为单个订阅创建请求级上下文、正文流和终止事件，确保重复订阅不会共享状态。
+     */
+    private Flux<DiagnosisStreamEvent> createDiagnosisStream(String question) {
+        String diagnosisId = traceRecorder.start();
+        //线程安全的
+        AtomicBoolean hasAnswerContent = new AtomicBoolean(false);
+        DiagnosisAnswerFormatter.StreamFormatter formatter = answerFormatter.createStreamFormatter();
+
+        Flux<DiagnosisStreamEvent> contentEvents = diagnosisChatClient.prompt()
+                .user(question)
+                .toolContext(Map.of(ToolCallTraceRecorder.DIAGNOSIS_ID_CONTEXT_KEY, diagnosisId))
+                .stream()
+                .content()
+                .map(formatter::format)
+                .filter(chunk -> !chunk.isEmpty())
+                // 模型通常按 token 返回；以很小的时间窗合并可显著减少 SSE 与 JavaFX 刷新次数，同时保持实时感。
+                .bufferTimeout(32, Duration.ofMillis(40))
+                .map(chunks -> String.join("", chunks))
+                .map(chunk -> {
+                    if (StringUtils.hasText(chunk)) {
+                        hasAnswerContent.set(true);
+                    }
+                    return DiagnosisStreamEvent.content(chunk);
+                });
+
+        Mono<DiagnosisStreamEvent> terminalEvent = Mono.defer(() -> {
+            if (!hasAnswerContent.get()) {
+                return Mono.just(DiagnosisStreamEvent.error(
+                        ExceptionMessages.EMPTY_MODEL_RESPONSE,
+                        traceRecorder.snapshot(diagnosisId)
+                ));
             }
-            return new DiagnosisResult(answer, traceRecorder.snapshot());
-        } catch (DiagnosisUnavailableException exception) {
-            throw exception;
-        } catch (RuntimeException exception) {
-            // 模型调用是外部网络边界。这里转成业务异常，避免把供应商响应、端点或凭证相关细节直接暴露给 API 调用方。
-            throw new DiagnosisUnavailableException(ExceptionMessages.MODEL_DIAGNOSIS_UNAVAILABLE, exception);
-        } finally {
-            // Web 线程会被线程池复用，必须清理 ThreadLocal，避免下一次请求读取到上一次诊断轨迹。
-            traceRecorder.clear();
-        }
+            return Mono.just(DiagnosisStreamEvent.completed(traceRecorder.snapshot(diagnosisId)));
+        });
+
+        return contentEvents
+                .concatWith(terminalEvent)
+                // SSE 响应可能已经开始写出，失败时必须通过流内 ERROR 事件返回安全消息，不能泄露供应商异常。
+                .onErrorResume(exception -> Flux.just(DiagnosisStreamEvent.error(
+                        ExceptionMessages.MODEL_DIAGNOSIS_UNAVAILABLE,
+                        traceRecorder.snapshot(diagnosisId)
+                )))
+                // 客户端主动断开同样会触发 finally，确保不会遗留会话轨迹。
+                .doFinally(signalType -> traceRecorder.clear(diagnosisId));
     }
 }

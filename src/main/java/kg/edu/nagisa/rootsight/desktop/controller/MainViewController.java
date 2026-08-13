@@ -14,9 +14,8 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import kg.edu.nagisa.rootsight.agent.DiagnosisService;
-import kg.edu.nagisa.rootsight.agent.model.DiagnosisResult;
+import kg.edu.nagisa.rootsight.agent.model.DiagnosisStreamEvent;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
-import kg.edu.nagisa.rootsight.common.exception.DiagnosisUnavailableException;
 import kg.edu.nagisa.rootsight.desktop.component.DesktopViewLoader;
 import kg.edu.nagisa.rootsight.desktop.constant.DesktopMessages;
 import lombok.RequiredArgsConstructor;
@@ -24,17 +23,15 @@ import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import reactor.core.scheduler.Scheduler;
 
 import java.io.IOException;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
 
 /**
- * 桌面主界面控制器，负责收集用户输入、异步调用诊断服务并渲染答案与 Tool 轨迹。
+ * 桌面主界面控制器，负责收集用户输入、订阅流式诊断并增量渲染答案与 Tool 轨迹。
  */
 @Component
 @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
@@ -45,7 +42,7 @@ public class MainViewController {
 
     private final DiagnosisService diagnosisService;
     private final DesktopViewLoader viewLoader;
-    private final ExecutorService desktopTaskExecutor;
+    private final Scheduler desktopTaskScheduler;
 
     @FXML
     private TextArea questionInput;
@@ -84,7 +81,7 @@ public class MainViewController {
     }
 
     /**
-     * 校验问题并在后台线程执行诊断，防止模型网络调用冻结桌面窗口。
+     * 校验问题并在后台调度器订阅诊断流，使模型每返回一段内容就立即刷新界面。
      */
     @FXML
     private void handleDiagnose() {
@@ -95,19 +92,15 @@ public class MainViewController {
         }
 
         setBusy(true);
-        answerOutput.setText("Agent 正在整理证据，请稍候…");
+        answerOutput.clear();
         renderTrace(List.of());
 
-        CompletableFuture
-                .supplyAsync(() -> diagnosisService.diagnose(question), desktopTaskExecutor)
-                .whenComplete((result, throwable) -> Platform.runLater(() -> {
-                    setBusy(false);
-                    if (throwable != null) {
-                        showInlineError(resolveFailureMessage(throwable));
-                        return;
-                    }
-                    renderDiagnosis(result);
-                }));
+        diagnosisService.diagnoseStream(question)
+                .subscribeOn(desktopTaskScheduler)
+                .subscribe(
+                        event -> Platform.runLater(() -> renderStreamEvent(event)),
+                        throwable -> Platform.runLater(this::handleUnexpectedStreamFailure)
+                );
     }
 
     /**
@@ -150,13 +143,33 @@ public class MainViewController {
     }
 
     /**
-     * 将 Agent 返回的文本结论和 Tool 轨迹更新到界面。
+     * 根据流式事件增量追加正文，或在终止事件到达时更新状态与 Tool 轨迹。
      */
-    private void renderDiagnosis(DiagnosisResult result) {
-        answerOutput.setText(result.answer());
-        renderTrace(result.toolCalls());
+    private void renderStreamEvent(DiagnosisStreamEvent event) {
+        switch (event.type()) {
+            case CONTENT -> answerOutput.appendText(event.content());
+            case COMPLETED -> finishDiagnosis(event.toolCalls());
+            case ERROR -> failDiagnosis(event.content(), event.toolCalls());
+        }
+    }
+
+    /**
+     * 正常结束一次流式诊断，并展示本次实际执行的 Tool 轨迹。
+     */
+    private void finishDiagnosis(List<ToolCallTrace> traces) {
+        renderTrace(traces);
+        setBusy(false);
         statusLabel.setText(DesktopMessages.FINISHED);
         lastRunLabel.setText("完成于 " + LocalTime.now().format(TIME_FORMATTER));
+    }
+
+    /**
+     * 处理服务通过 ERROR 事件返回的安全错误消息，同时保留失败前已经取得的 Tool 轨迹。
+     */
+    private void failDiagnosis(String message, List<ToolCallTrace> traces) {
+        renderTrace(traces);
+        setBusy(false);
+        showInlineError(StringUtils.hasText(message) ? message : DesktopMessages.UNKNOWN_FAILURE);
     }
 
     /**
@@ -208,15 +221,11 @@ public class MainViewController {
     }
 
     /**
-     * 从 CompletableFuture 包装异常中提取业务消息，未知异常不向界面暴露底层实现细节。
+     * 处理未被诊断服务转成 ERROR 事件的意外流错误，不向界面暴露底层实现细节。
      */
-    private String resolveFailureMessage(Throwable throwable) {
-        Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
-                ? throwable.getCause()
-                : throwable;
-        return cause instanceof DiagnosisUnavailableException && StringUtils.hasText(cause.getMessage())
-                ? cause.getMessage()
-                : DesktopMessages.UNKNOWN_FAILURE;
+    private void handleUnexpectedStreamFailure() {
+        setBusy(false);
+        showInlineError(DesktopMessages.UNKNOWN_FAILURE);
     }
 
     /**
@@ -227,6 +236,8 @@ public class MainViewController {
             case "query_service_http_metrics" -> "HTTP 指标采样";
             case "query_recent_error_logs" -> "异常日志检索";
             case "check_redis_health" -> "Redis 健康检查";
+            case "inspect_mysql_status" -> "MySQL 只读状态检查";
+            case "inspect_redis_status" -> "Redis 只读状态检查";
             default -> toolName;
         };
     }

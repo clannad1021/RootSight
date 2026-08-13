@@ -1,11 +1,12 @@
 package kg.edu.nagisa.rootsight.api.dto;
 
+import kg.edu.nagisa.rootsight.agent.model.DiagnosisStreamEvent;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
 
 import java.util.List;
 
 /**
- * 诊断响应。Tool 轨迹用于展示 Agent 实际取证路径，不等同于模型的文字推断。
+ * SSE 诊断响应。CONTENT 事件携带正文增量，COMPLETED/ERROR 事件携带最终 Tool 轨迹。
  */
-public record DiagnosisResponse(String answer, List<ToolCallTrace> toolCalls) {
+public record DiagnosisResponse(DiagnosisStreamEvent.Type type, String content, List<ToolCallTrace> toolCalls) {
 }

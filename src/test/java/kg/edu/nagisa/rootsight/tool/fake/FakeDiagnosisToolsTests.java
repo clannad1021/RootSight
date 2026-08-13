@@ -7,8 +7,10 @@ import kg.edu.nagisa.rootsight.tool.evidence.ComponentHealthEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.HttpMetricsEvidence;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.model.ToolContext;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,11 +20,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FakeDiagnosisToolsTests {
 
     private ToolCallTraceRecorder traceRecorder;
+    private String diagnosisId;
+    private ToolContext toolContext;
 
     @BeforeEach
     void setUp() {
         traceRecorder = new ToolCallTraceRecorder();
-        traceRecorder.start();
+        diagnosisId = traceRecorder.start();
+        toolContext = new ToolContext(Map.of(
+                ToolCallTraceRecorder.DIAGNOSIS_ID_CONTEXT_KEY,
+                diagnosisId
+        ));
     }
 
     @Test
@@ -31,9 +39,9 @@ class FakeDiagnosisToolsTests {
         FakeLogTool logTool = new FakeLogTool(traceRecorder);
         FakeRedisTool redisTool = new FakeRedisTool(traceRecorder);
 
-        HttpMetricsEvidence metrics = metricsTool.queryServiceHttpMetrics("order-service");
-        ApplicationLogEvidence logs = logTool.queryRecentErrorLogs("order-service");
-        ComponentHealthEvidence redis = redisTool.checkRedisHealth();
+        HttpMetricsEvidence metrics = metricsTool.queryServiceHttpMetrics("order-service", toolContext);
+        ApplicationLogEvidence logs = logTool.queryRecentErrorLogs("order-service", toolContext);
+        ComponentHealthEvidence redis = redisTool.checkRedisHealth(toolContext);
 
         assertThat(metrics.p95LatencyMs()).isEqualTo(920);
         assertThat(metrics.successRatePercent()).isEqualTo(99.8);
@@ -41,7 +49,7 @@ class FakeDiagnosisToolsTests {
         assertThat(redis.status()).isEqualTo("DOWN");
         assertThat(redis.reachable()).isFalse();
 
-        List<String> toolNames = traceRecorder.snapshot().stream()
+        List<String> toolNames = traceRecorder.snapshot(diagnosisId).stream()
                 .map(ToolCallTrace::toolName)
                 .toList();
         assertThat(toolNames).containsExactly(

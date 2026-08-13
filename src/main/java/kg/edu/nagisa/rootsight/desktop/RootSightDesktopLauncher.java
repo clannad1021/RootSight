@@ -9,6 +9,9 @@ import javafx.application.Application;
  */
 public final class RootSightDesktopLauncher {
 
+    /**
+     * 通过普通 Java 主类启动 JavaFX 桌面应用。
+     */
     public static void main(String[] args) {
         Application.launch(RootSightDesktopApplication.class, args);
     }

@@ -49,6 +49,21 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-deepseek</artifactId>
         </dependency>
+        <!-- Stage 2A：只读检查 MySQL 状态，SQL 固定在 Java 客户端中，不接受模型生成的任意 SQL。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Stage 2A：通过 Spring Data Redis 的连接抽象执行 PING/INFO 等无副作用命令。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <!-- Lombok 只在编译期生成构造方法，避免重复编写依赖注入样板代码。 -->
         <dependency>
             <groupId>org.projectlombok</groupId>

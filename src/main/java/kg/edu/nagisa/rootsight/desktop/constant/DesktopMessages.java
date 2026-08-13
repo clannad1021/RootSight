@@ -9,7 +9,7 @@ import lombok.experimental.UtilityClass;
 public class DesktopMessages {
 
     public static final String READY = "等待诊断任务";
-    public static final String RUNNING = "正在调用 Agent 收集证据…";
+    public static final String RUNNING = "Agent 正在流式诊断…";
     public static final String EMPTY_QUESTION = "请先描述需要诊断的故障现象";
     public static final String EMPTY_RESULT = "诊断完成后，Agent 的结论会显示在这里。";
     public static final String EMPTY_TRACE = "尚未调用 Tool";

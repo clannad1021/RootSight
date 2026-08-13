@@ -1,6 +1,26 @@
 spring:
   application:
     name: root-sight
+  datasource:
+    # 状态查询不依赖业务库表，因此默认 URL 不绑定某个具体数据库；需要时可用环境变量覆盖。
+    url: ${ROOTSIGHT_DB_URL:jdbc:mysql://localhost:3306/?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${ROOTSIGHT_DB_USERNAME:readonly}
+    password: ${ROOTSIGHT_DB_PASSWORD:}
+    hikari:
+      # RootSight 只观察数据库；连接池和只读账号共同限制误写风险。
+      read-only: true
+      maximum-pool-size: ${ROOTSIGHT_DB_MAX_POOL_SIZE:2}
+      minimum-idle: 0
+      connection-timeout: ${ROOTSIGHT_DB_CONNECTION_TIMEOUT:3000}
+      validation-timeout: ${ROOTSIGHT_DB_VALIDATION_TIMEOUT:2000}
+  data:
+    redis:
+      host: ${ROOTSIGHT_REDIS_HOST:localhost}
+      port: ${ROOTSIGHT_REDIS_PORT:6379}
+      username: ${ROOTSIGHT_REDIS_USERNAME:rootsight}
+      password: ${ROOTSIGHT_REDIS_PASSWORD:}
+      database: ${ROOTSIGHT_REDIS_DATABASE:2}
+      timeout: 3s
   ai:
     model:
       chat: deepseek
@@ -19,6 +39,19 @@ spring:
         model: ${DEEPSEEK_CHAT_MODEL:deepseek-v4-flash}
         # 诊断回答优先稳定和可复现，暂时不追求创意性。
         temperature: ${DEEPSEEK_CHAT_TEMPERATURE:0.2}
+
+rootsight:
+  target:
+    # 当前进程连接的一组基础设施使用一个逻辑名称，后续可演进为多目标配置。
+    name: ${ROOTSIGHT_TARGET_NAME:default-target}
+
+management:
+  health:
+    # Redis/MySQL 是被观察目标，不是 RootSight 自身依赖；目标宕机时 Agent 仍应保持健康并完成诊断。
+    redis:
+      enabled: false
+    db:
+      enabled: false
 
 server:
   # 使用独立端口，避免与常见的 8080 业务服务端口冲突。
