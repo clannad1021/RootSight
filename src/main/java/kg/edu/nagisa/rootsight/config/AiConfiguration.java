@@ -3,7 +3,9 @@ package kg.edu.nagisa.rootsight.config;
 import kg.edu.nagisa.rootsight.tool.fake.FakeLogTool;
 import kg.edu.nagisa.rootsight.tool.fake.FakeMetricsTool;
 import kg.edu.nagisa.rootsight.tool.infrastructure.MySqlInspectionTool;
+import kg.edu.nagisa.rootsight.tool.infrastructure.RabbitMqInspectionTool;
 import kg.edu.nagisa.rootsight.tool.infrastructure.RedisInspectionTool;
+import kg.edu.nagisa.rootsight.tool.infrastructure.SafeConfigurationInspectionTool;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,7 +27,9 @@ public class AiConfiguration {
                                           FakeMetricsTool fakeMetricsTool,
                                           FakeLogTool fakeLogTool,
                                           RedisInspectionTool redisInspectionTool,
-                                          MySqlInspectionTool mySqlInspectionTool) {
+                                          MySqlInspectionTool mySqlInspectionTool,
+                                          RabbitMqInspectionTool rabbitMqInspectionTool,
+                                          SafeConfigurationInspectionTool safeConfigurationInspectionTool) {
         return builder
                 .defaultSystem("""
                         你是 RootSight，一个专业的面向通用软件系统的智能运维故障诊断助手。
@@ -44,7 +48,8 @@ public class AiConfiguration {
                         - 不使用 Markdown，不输出星号、井号、反引号、斜杠列表、表格或代码围栏等格式符号。
                         使用中文回答。
                         """)
-                .defaultTools(fakeMetricsTool, fakeLogTool, redisInspectionTool, mySqlInspectionTool)
+                .defaultTools(fakeMetricsTool, fakeLogTool, redisInspectionTool, mySqlInspectionTool,
+                        rabbitMqInspectionTool, safeConfigurationInspectionTool)
                 .build();
     }
 }

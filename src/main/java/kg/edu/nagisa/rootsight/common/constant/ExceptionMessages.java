@@ -22,4 +22,5 @@ public class ExceptionMessages {
     public static final String MYSQL_INSPECTION_FAILED = "MySQL 连接或状态查询失败";
     public static final String REDIS_INSPECTION_FAILED = "Redis 连接或状态查询失败";
     public static final String REDIS_INFO_UNAVAILABLE = "Redis PING 成功，但当前账号无权读取 INFO 指标";
+    public static final String RABBITMQ_INSPECTION_FAILED = "RabbitMQ Management API 连接或状态查询失败";
 }

@@ -44,6 +44,17 @@ rootsight:
   target:
     # 当前进程连接的一组基础设施使用一个逻辑名称，后续可演进为多目标配置。
     name: ${ROOTSIGHT_TARGET_NAME:default-target}
+  rabbitmq:
+    management:
+      # RabbitMQ 仅通过 Management HTTP API 读取状态，不建立 AMQP 业务连接。
+      url: ${ROOTSIGHT_RABBITMQ_MANAGEMENT_URL:http://127.0.0.1:15672}
+      username: ${ROOTSIGHT_RABBITMQ_USERNAME:rootsight_monitor}
+      password: ${ROOTSIGHT_RABBITMQ_PASSWORD:}
+      vhost: ${ROOTSIGHT_RABBITMQ_VHOST:/}
+      queue-page-size: ${ROOTSIGHT_RABBITMQ_QUEUE_PAGE_SIZE:100}
+      queue-sample-limit: ${ROOTSIGHT_RABBITMQ_QUEUE_SAMPLE_LIMIT:20}
+      connect-timeout: ${ROOTSIGHT_RABBITMQ_CONNECT_TIMEOUT:3s}
+      read-timeout: ${ROOTSIGHT_RABBITMQ_READ_TIMEOUT:5s}
 
 management:
   health:

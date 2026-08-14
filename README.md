@@ -6,14 +6,15 @@ RootSight 是一个面向通用软件系统的轻量级智能运维故障诊断 
 
 ## 当前阶段
 
-项目已完成 Stage 1A、Stage 1B 和 Stage 2A：
+项目已完成 Stage 1A、Stage 1B、Stage 2A 和 Stage 2B：
 
 - 通过 Spring AI `ChatClient` 调用 DeepSeek。
 - 提供统一的故障诊断 REST API。
 - 支持 Bean Validation 和统一异常响应。
 - 支持模型自主选择并多轮调用 Tool。
 - 提供 Fake Metrics、Log、Redis Tool，用固定演示证据验证 Agent Loop。
-- 提供真实 Redis、MySQL 只读 Tool，读取连通性和基础运行状态。
+- 提供真实 Redis、MySQL、RabbitMQ 只读 Tool，读取连通性和基础运行状态。
+- 提供固定白名单的安全配置 Tool，不允许按任意配置键读取环境信息。
 - 通过 SSE 流式返回模型正文，客户端无需等待完整回答生成。
 - 在流结束事件中返回本次实际执行的 Tool 调用轨迹。
 - 使用固定的纯文本报告层级，并在展示前清理 Markdown 格式噪声。
@@ -52,6 +53,7 @@ COMPLETED 事件返回 Tool 调用轨迹
 - DeepSeek V4 Flash
 - Spring JDBC、MySQL Connector/J
 - Spring Data Redis、Lettuce
+- Spring `RestClient`、RabbitMQ Management HTTP API
 - JavaFX 21
 - Maven
 - Lombok
@@ -67,12 +69,13 @@ src/main/java/kg/edu/nagisa/rootsight
 ├── config      ChatClient 与 AI 配置
 ├── infrastructure
 │   ├── mysql   MySQL 固定只读状态客户端
-│   └── redis   Redis PING/INFO 状态客户端
+│   ├── rabbitmq RabbitMQ Management API 状态客户端
+│   └── redis    Redis PING/INFO 状态客户端
 ├── desktop     JavaFX 桌面客户端
 └── tool
     ├── evidence        Tool 返回的结构化证据
     ├── fake            Stage 1B 保留的模拟 Tool
-    └── infrastructure  Stage 2A 的真实基础设施 Tool
+    └── infrastructure  Stage 2A/2B 的真实基础设施与安全配置 Tool
 ```
 
 ## 运行项目
@@ -81,7 +84,7 @@ src/main/java/kg/edu/nagisa/rootsight
 
 - JDK 17
 - 可用的 DeepSeek API Key
-- 可访问的 Redis 和 MySQL；建议使用只读/监控账号
+- 可访问的 Redis、MySQL 和启用了 Management 插件的 RabbitMQ；建议使用只读/监控账号
 
 将 API Key 配置到环境变量，不要写入 `application.yml` 或提交到 Git：
 
@@ -159,6 +162,14 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | `ROOTSIGHT_REDIS_USERNAME` | `rootsight` | Redis ACL 只读账号 |
 | `ROOTSIGHT_REDIS_PASSWORD` | 无 | Redis ACL 账号密码 |
 | `ROOTSIGHT_REDIS_DATABASE` | `2` | Redis 数据库编号 |
+| `ROOTSIGHT_RABBITMQ_MANAGEMENT_URL` | `http://127.0.0.1:15672` | RabbitMQ Management API 地址 |
+| `ROOTSIGHT_RABBITMQ_USERNAME` | `rootsight_monitor` | RabbitMQ 监控账号 |
+| `ROOTSIGHT_RABBITMQ_PASSWORD` | 无 | RabbitMQ 监控账号密码 |
+| `ROOTSIGHT_RABBITMQ_VHOST` | `/` | 允许查询的 RabbitMQ vhost |
+| `ROOTSIGHT_RABBITMQ_QUEUE_PAGE_SIZE` | `100` | 单次检查的队列分页大小，代码强制限制在 1～500 |
+| `ROOTSIGHT_RABBITMQ_QUEUE_SAMPLE_LIMIT` | `20` | 最多返回给模型的队列样本数 |
+| `ROOTSIGHT_RABBITMQ_CONNECT_TIMEOUT` | `3s` | Management API 连接超时 |
+| `ROOTSIGHT_RABBITMQ_READ_TIMEOUT` | `5s` | Management API 读取超时 |
 
 ## 基础设施只读边界
 
@@ -166,8 +177,11 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 - Hikari 连接池启用只读模式，并建议配合数据库只读账号形成双重约束。
 - Redis Tool 只执行 `PING` 和分区 `INFO`，不遍历 Key，也不执行写命令。
 - Redis 账号只有 `PING` 权限时仍返回 `UP`，同时用 `metricsAvailable=false` 标明 INFO 指标不可用。
-- 连接失败会返回 `DOWN` 结构化证据，不会把 JDBC/Redis 底层异常或连接信息发送给模型。
-- Redis/MySQL 属于被观察目标，不参与 RootSight 自身 Actuator 健康判定；目标宕机时诊断服务仍保持可用。
+- RabbitMQ Tool 只通过 Management HTTP API 读取节点概览和指定 vhost 的有界队列分页，不建立 AMQP 连接、不读取消息正文，也不发布或消费消息。
+- 队列总数超过当前分页或样本上限时使用 `queueResultTruncated=true` 明确标记，分页汇总字段使用 `sampled` 前缀，避免把局部数据误当作全局总量。
+- 安全配置 Tool 没有任意配置键参数，只返回应用名、逻辑目标、模型名、服务端口、Redis 数据库编号、RabbitMQ vhost 和可用只读 Tool；密码、密钥、用户名、连接 URL、原始环境变量始终排除。
+- 连接失败会返回 `DOWN` 结构化证据，不会把 JDBC、Redis 或 RabbitMQ 底层异常和连接信息发送给模型。
+- Redis、MySQL、RabbitMQ 属于被观察目标，不参与 RootSight 自身 Actuator 健康判定；目标宕机时诊断服务仍保持可用。
 
 ## 阶段进度
 
@@ -176,7 +190,7 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | Stage 1A | 已完成 | 基础工程、真实模型调用和诊断 API |
 | Stage 1B | 已完成 | Fake Tool、多步 Tool Calling 和调用轨迹 |
 | Stage 2A | 已完成 | 接入真实 Redis 和 MySQL 只读 Tool |
-| Stage 2B | 待实现 | 接入 RabbitMQ 和安全配置查询 Tool |
+| Stage 2B | 已完成 | 接入 RabbitMQ Management API 和安全配置查询 Tool |
 | Stage 3 | 待实现 | Loki 日志采集与日志查询 Tool |
 | Stage 4 | 待实现 | Prometheus 指标采集与指标查询 Tool |
 | Stage 5 | 待实现 | RAG 运行知识库 |
@@ -185,7 +199,7 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 
 ## 当前边界
 
-- Metrics 与 Log 仍为固定演示数据；Redis 和 MySQL 已连接真实基础设施。
+- Metrics 与 Log 仍为固定演示数据；Redis、MySQL 和 RabbitMQ 已连接真实基础设施。
 - REST API 与 JavaFX 客户端均已使用流式诊断；JavaFX 会逐段追加模型回答。
 - 尚未实现会话记忆、RAG 和持久化诊断状态。
 - RootSight 只提供读取、分析和建议，不执行具有副作用的运维操作。

@@ -7,6 +7,9 @@ import org.springframework.context.annotation.Configuration;
  * 注册基础设施目标配置。
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(InfrastructureTargetProperties.class)
+@EnableConfigurationProperties({
+        InfrastructureTargetProperties.class,
+        RabbitMqManagementProperties.class
+})
 public class InfrastructureConfiguration {
 }
