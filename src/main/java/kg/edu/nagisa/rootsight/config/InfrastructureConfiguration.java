@@ -9,7 +9,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
         InfrastructureTargetProperties.class,
-        RabbitMqManagementProperties.class
+        RabbitMqManagementProperties.class,
+        LokiProperties.class
 })
 public class InfrastructureConfiguration {
 }

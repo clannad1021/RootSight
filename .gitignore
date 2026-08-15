@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Stage 3 observed logs ###
+/observed-logs/*.log
+/observed-logs/*.txt
+/observed-logs/*.json

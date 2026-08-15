@@ -13,6 +13,7 @@ public record SafeConfigurationEvidence(
         int serverPort,
         int redisDatabase,
         String rabbitMqVhost,
+        String lokiDefaultService,
         List<String> availableReadOnlyTools,
         List<String> excludedSensitiveCategories
 ) {

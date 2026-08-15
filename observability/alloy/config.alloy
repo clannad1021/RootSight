@@ -1,0 +1,29 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// 只采集用户显式放入 observed-logs 的文本日志，避免读取宿主机其他文件。
+loki.source.file "observed_application_logs" {
+  targets = [
+    {
+      __path__         = "/var/log/observed/*.{log,txt,json}",
+      __path_exclude__ = "/var/log/observed/*.{gz,zip,bak,old}",
+      service_name     = sys.env("ROOTSIGHT_OBSERVED_SERVICE"),
+      job              = "application-logs",
+    },
+  ]
+  forward_to = [loki.write.local.receiver]
+
+  file_match {
+    enabled     = true
+    sync_period = "5s"
+  }
+}
+
+// 将采集到的日志写入同一 Compose 网络内的单租户 Loki。
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

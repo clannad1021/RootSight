@@ -3,11 +3,14 @@ package kg.edu.nagisa.rootsight.tool.infrastructure;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
 import kg.edu.nagisa.rootsight.config.InfrastructureTargetProperties;
+import kg.edu.nagisa.rootsight.config.LokiProperties;
 import kg.edu.nagisa.rootsight.config.RabbitMqManagementProperties;
+import kg.edu.nagisa.rootsight.infrastructure.loki.LokiLogClient;
 import kg.edu.nagisa.rootsight.infrastructure.mysql.MySqlStatusClient;
 import kg.edu.nagisa.rootsight.infrastructure.rabbitmq.RabbitMqStatusClient;
 import kg.edu.nagisa.rootsight.infrastructure.redis.RedisStatusClient;
 import kg.edu.nagisa.rootsight.tool.evidence.MySqlStatusEvidence;
+import kg.edu.nagisa.rootsight.tool.evidence.LokiLogEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.RabbitMqStatusEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.RedisStatusEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.SafeConfigurationEvidence;
@@ -117,8 +120,9 @@ class InfrastructureInspectionToolsTests {
                 "http://rabbit.test", "monitor", "must-not-leak", "/test",
                 100, 20, Duration.ofSeconds(3), Duration.ofSeconds(5)
         );
+        LokiProperties loki = lokiProperties();
         SafeConfigurationInspectionTool tool = new SafeConfigurationInspectionTool(
-                environment, target, rabbit, traceRecorder
+                environment, target, rabbit, loki, traceRecorder
         );
 
         SafeConfigurationEvidence evidence = tool.inspectSafeConfiguration(toolContext);
@@ -126,10 +130,47 @@ class InfrastructureInspectionToolsTests {
         assertThat(evidence.evidenceSource()).isEqualTo("REAL");
         assertThat(evidence.applicationName()).isEqualTo("root-sight-test");
         assertThat(evidence.rabbitMqVhost()).isEqualTo("/test");
-        assertThat(evidence.availableReadOnlyTools()).contains("rabbitmq-status");
+        assertThat(evidence.lokiDefaultService()).isEqualTo("observed-target");
+        assertThat(evidence.availableReadOnlyTools()).contains("rabbitmq-status", "loki-logs");
         assertThat(evidence.excludedSensitiveCategories()).contains("passwords", "environment-variables");
         assertThat(evidence.toString()).doesNotContain("must-not-leak", "rabbit.test", "monitor");
         assertThat(toolNames()).containsExactly("inspect_safe_configuration");
+    }
+
+    /**
+     * 验证 Loki Tool 返回真实日志证据，并把查询策略和命中数量写入当前诊断轨迹。
+     */
+    @Test
+    void shouldRecordLokiLogInspectionTrace() {
+        LokiLogClient client = mock(LokiLogClient.class);
+        LokiLogEvidence expected = new LokiLogEvidence(
+                "REAL", "test-target", "observed-target", "AVAILABLE", true, 12,
+                null, null, "EXACT_RANGE", 1, 2, false, null,
+                List.of(), true, List.of(), "Loki 日志查询成功"
+        );
+        given(client.queryLogs(null, null, "timeout", null, 20)).willReturn(expected);
+
+        LokiLogEvidence actual = new LokiLogInspectionTool(client, traceRecorder)
+                .queryApplicationLogs(null, null, "timeout", null, 20, toolContext);
+
+        assertThat(actual).isEqualTo(expected);
+        assertThat(toolNames()).containsExactly("query_application_logs");
+        assertThat(traceRecorder.snapshot(diagnosisId).get(0).summary())
+                .contains("[REAL]", "策略=EXACT_RANGE", "命中=2");
+    }
+
+    /**
+     * 创建 Tool 测试使用的 Loki 查询策略配置。
+     */
+    private static LokiProperties lokiProperties() {
+        return new LokiProperties(
+                "http://loki.test", "service_name", "observed-target",
+                50, 100, 120, 1000,
+                Duration.ofMinutes(30),
+                List.of(Duration.ofHours(2), Duration.ofHours(6), Duration.ofHours(24)),
+                Duration.ofDays(7), Duration.ofMinutes(10), Duration.ofMinutes(20),
+                Duration.ofSeconds(30), 20, Duration.ofSeconds(3), Duration.ofSeconds(8)
+        );
     }
 
     private List<String> toolNames() {

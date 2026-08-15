@@ -55,6 +55,27 @@ rootsight:
       queue-sample-limit: ${ROOTSIGHT_RABBITMQ_QUEUE_SAMPLE_LIMIT:20}
       connect-timeout: ${ROOTSIGHT_RABBITMQ_CONNECT_TIMEOUT:3s}
       read-timeout: ${ROOTSIGHT_RABBITMQ_READ_TIMEOUT:5s}
+  loki:
+    # RootSight 只调用查询 API；日志写入由 Alloy 完成。
+    url: ${ROOTSIGHT_LOKI_URL:http://127.0.0.1:3100}
+    service-label: ${ROOTSIGHT_LOKI_SERVICE_LABEL:service_name}
+    default-service: ${ROOTSIGHT_LOKI_DEFAULT_SERVICE:observed-target}
+    default-limit: ${ROOTSIGHT_LOKI_DEFAULT_LIMIT:50}
+    max-limit: ${ROOTSIGHT_LOKI_MAX_LIMIT:100}
+    max-filter-length: ${ROOTSIGHT_LOKI_MAX_FILTER_LENGTH:120}
+    max-line-length: ${ROOTSIGHT_LOKI_MAX_LINE_LENGTH:1000}
+    default-window: ${ROOTSIGHT_LOKI_DEFAULT_WINDOW:30m}
+    expansion-windows:
+      - ${ROOTSIGHT_LOKI_EXPANSION_WINDOW_1:2h}
+      - ${ROOTSIGHT_LOKI_EXPANSION_WINDOW_2:6h}
+      - ${ROOTSIGHT_LOKI_EXPANSION_WINDOW_3:24h}
+    fallback-window: ${ROOTSIGHT_LOKI_FALLBACK_WINDOW:168h}
+    incident-before: ${ROOTSIGHT_LOKI_INCIDENT_BEFORE:10m}
+    incident-after: ${ROOTSIGHT_LOKI_INCIDENT_AFTER:20m}
+    context-window: ${ROOTSIGHT_LOKI_CONTEXT_WINDOW:30s}
+    context-limit: ${ROOTSIGHT_LOKI_CONTEXT_LIMIT:20}
+    connect-timeout: ${ROOTSIGHT_LOKI_CONNECT_TIMEOUT:3s}
+    read-timeout: ${ROOTSIGHT_LOKI_READ_TIMEOUT:8s}
 
 management:
   health:
