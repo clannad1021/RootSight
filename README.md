@@ -6,17 +6,19 @@ RootSight 是一个面向通用软件系统的轻量级智能运维故障诊断 
 
 ## 当前阶段
 
-项目已完成 Stage 1A、Stage 1B、Stage 2A、Stage 2B 和 Stage 3：
+项目已完成 Stage 1A、Stage 1B、Stage 2A、Stage 2B、Stage 3 和 Stage 4：
 
 - 通过 Spring AI `ChatClient` 调用 DeepSeek。
 - 提供统一的故障诊断 REST API。
 - 支持 Bean Validation 和统一异常响应。
 - 支持模型自主选择并多轮调用 Tool。
-- 保留 Fake Tool 源码用于回归 Stage 1B 的 Agent Loop；运行时日志能力已切换为真实 Loki Tool。
+- 保留 Fake Tool 源码用于回归 Stage 1B 的 Agent Loop；运行时日志和指标能力已切换为真实 Loki/Prometheus Tool。
 - 提供真实 Redis、MySQL、RabbitMQ 只读 Tool，读取连通性和基础运行状态。
 - 通过 Grafana Alloy 采集目标应用文件日志，并提供真实 Loki 只读查询 Tool。
 - 日志查询支持故障时间锚点、渐进扩窗、最近异常兜底和命中点上下文补查。
 - LogQL 由后端根据结构化参数构造，模型不能提交任意 LogQL。
+- 通过 Prometheus 抓取目标应用的标准 Micrometer 指标，并提供真实指标查询 Tool。
+- PromQL 由后端固定生成，只允许模型选择服务、故障时间和白名单统计窗口。
 - 提供固定白名单的安全配置 Tool，不允许按任意配置键读取环境信息。
 - 通过 SSE 流式返回模型正文，客户端无需等待完整回答生成。
 - 在流结束事件中返回本次实际执行的 Tool 调用轨迹。
@@ -57,7 +59,7 @@ COMPLETED 事件返回 Tool 调用轨迹
 - Spring JDBC、MySQL Connector/J
 - Spring Data Redis、Lettuce
 - Spring `RestClient`、RabbitMQ Management HTTP API
-- Grafana Loki 3.7.2、Grafana Alloy 1.18.0、Docker Compose
+- Grafana Loki 3.7.2、Grafana Alloy 1.18.0、Prometheus 3.13.1、Docker Compose
 - JavaFX 21
 - Maven
 - Lombok
@@ -74,14 +76,15 @@ src/main/java/kg/edu/nagisa/rootsight
 ├── infrastructure
 │   ├── loki    Loki 受控日志查询客户端
 │   ├── mysql   MySQL 固定只读状态客户端
+│   ├── prometheus Prometheus 固定指标查询客户端
 │   ├── rabbitmq RabbitMQ Management API 状态客户端
 │   └── redis    Redis PING/INFO 状态客户端
 ├── desktop     JavaFX 桌面客户端
 └── tool
     ├── evidence        Tool 返回的结构化证据
     ├── fake            Stage 1B 保留的模拟 Tool
-    └── infrastructure  Stage 2A～3 的真实基础设施、日志与安全配置 Tool
-observability           Loki、Alloy 与 Docker Compose 配置
+    └── infrastructure  Stage 2A～4 的真实基础设施、日志、指标与安全配置 Tool
+observability           Loki、Alloy、Prometheus 与 Docker Compose 配置
 observed-logs           Alloy 允许读取的目标应用日志目录
 ```
 
@@ -92,7 +95,8 @@ observed-logs           Alloy 允许读取的目标应用日志目录
 - JDK 17
 - 可用的 DeepSeek API Key
 - 可访问的 Redis、MySQL 和启用了 Management 插件的 RabbitMQ；建议使用只读/监控账号
-- Docker Desktop 与 Docker Compose，用于运行本地 Loki 和 Alloy
+- 被观察应用需暴露 Prometheus 格式指标；Spring Boot 应用可使用 Actuator 和 Micrometer Registry
+- Docker Desktop 与 Docker Compose，用于运行本地 Loki、Alloy 和 Prometheus
 
 将 API Key 配置到环境变量，不要写入 `application.yml` 或提交到 Git：
 
@@ -108,35 +112,43 @@ $env:DEEPSEEK_API_KEY="your-api-key"
 
 默认端口为 `8081`。可通过 `ROOTSIGHT_SERVER_PORT` 环境变量覆盖。
 
-### 启动日志采集
+### 启动日志与指标采集
 
 将需要观察的应用日志写入项目根目录的 `observed-logs`。支持 `.log`、`.txt` 和 `.json` 文件，真实日志文件不会进入 Git。
 
-启动 Loki 和 Alloy：
+当前仓库附带的 `prometheus/targets/shortpan.json` 将 ShortPan 作为本地示例目标，地址为 `host.docker.internal:8080`，并添加 `application=short-pan` 标签。主 Prometheus 配置通过 `file_sd` 加载目标，因此替换业务应用时只需新增或修改目标文件，不需要修改 RootSight Java 代码。
+
+当前本地 `observability/.env` 已把 Alloy 的只读日志目录指向 `D:/ShortPan/logs`，该文件不会提交 Git。其他环境可从 `.env.example` 复制并修改。
+
+启动 Loki、Alloy 和 Prometheus：
 
 ```powershell
-docker compose -f observability/docker-compose.yml up -d
+docker compose --env-file observability/.env -f observability/docker-compose.yml up -d
 ```
 
 默认情况下 Alloy 为日志添加 `service_name=observed-target`。如需使用其他逻辑服务名，应保证 Alloy 标签和 RootSight 默认查询服务一致：
 
 ```powershell
+$env:ROOTSIGHT_OBSERVED_LOG_PATH="D:/order-service/logs"
 $env:ROOTSIGHT_OBSERVED_SERVICE="order-service"
 $env:ROOTSIGHT_LOKI_DEFAULT_SERVICE="order-service"
-docker compose -f observability/docker-compose.yml up -d
+$env:ROOTSIGHT_PROMETHEUS_DEFAULT_SERVICE="order-service"
+docker compose --env-file observability/.env -f observability/docker-compose.yml up -d
 ```
 
 检查运行状态：
 
 ```powershell
-docker compose -f observability/docker-compose.yml ps
+docker compose --env-file observability/.env -f observability/docker-compose.yml ps
 Invoke-WebRequest http://127.0.0.1:3100/ready
+Invoke-WebRequest http://127.0.0.1:9090/-/ready
+Invoke-RestMethod http://127.0.0.1:9090/api/v1/targets
 ```
 
 停止日志基础设施：
 
 ```powershell
-docker compose -f observability/docker-compose.yml down
+docker compose --env-file observability/.env -f observability/docker-compose.yml down
 ```
 
 启动 JavaFX 桌面客户端：
@@ -227,6 +239,16 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | `ROOTSIGHT_LOKI_CONTEXT_LIMIT` | `20` | 上下文补查最多返回的日志数 |
 | `ROOTSIGHT_LOKI_CONNECT_TIMEOUT` | `3s` | Loki 连接超时 |
 | `ROOTSIGHT_LOKI_READ_TIMEOUT` | `8s` | Loki 查询读取超时 |
+| `ROOTSIGHT_PROMETHEUS_URL` | `http://127.0.0.1:9090` | Prometheus HTTP API 地址 |
+| `ROOTSIGHT_PROMETHEUS_SERVICE_LABEL` | `application` | 后端允许使用的固定服务标签名 |
+| `ROOTSIGHT_PROMETHEUS_DEFAULT_SERVICE` | `observed-target` | Tool 未提供服务名时查询的默认标签值 |
+| `ROOTSIGHT_PROMETHEUS_DEFAULT_WINDOW` | `5m` | 未提供窗口时使用的统计窗口 |
+| `ROOTSIGHT_PROMETHEUS_MAX_SERVICE_LENGTH` | `120` | 服务标签值的最大字符数 |
+| `ROOTSIGHT_PROMETHEUS_QUERY_TIMEOUT` | `5s` | Prometheus 单条查询执行超时 |
+| `ROOTSIGHT_PROMETHEUS_CONNECT_TIMEOUT` | `3s` | Prometheus 连接超时 |
+| `ROOTSIGHT_PROMETHEUS_READ_TIMEOUT` | `8s` | Prometheus 查询读取超时 |
+| `ROOTSIGHT_OBSERVED_LOG_PATH` | `../observed-logs` | Alloy 容器只读挂载的宿主日志目录 |
+| `ROOTSIGHT_OBSERVED_SERVICE` | `observed-target` | Alloy 写入 Loki 的 `service_name` 标签值 |
 
 ## 基础设施只读边界
 
@@ -236,7 +258,7 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 - Redis 账号只有 `PING` 权限时仍返回 `UP`，同时用 `metricsAvailable=false` 标明 INFO 指标不可用。
 - RabbitMQ Tool 只通过 Management HTTP API 读取节点概览和指定 vhost 的有界队列分页，不建立 AMQP 连接、不读取消息正文，也不发布或消费消息。
 - 队列总数超过当前分页或样本上限时使用 `queueResultTruncated=true` 明确标记，分页汇总字段使用 `sampled` 前缀，避免把局部数据误当作全局总量。
-- 安全配置 Tool 没有任意配置键参数，只返回应用名、逻辑目标、模型名、服务端口、Redis 数据库编号、RabbitMQ vhost、Loki 默认服务标签值和可用只读 Tool；密码、密钥、用户名、连接 URL、原始环境变量始终排除。
+- 安全配置 Tool 没有任意配置键参数，只返回应用名、逻辑目标、模型名、服务端口、Redis 数据库编号、RabbitMQ vhost、Loki/Prometheus 默认服务标签值和可用只读 Tool；密码、密钥、用户名、连接 URL、原始环境变量始终排除。
 - 连接失败会返回 `DOWN` 结构化证据，不会把 JDBC、Redis 或 RabbitMQ 底层异常和连接信息发送给模型。
 - Redis、MySQL、RabbitMQ 属于被观察目标，不参与 RootSight 自身 Actuator 健康判定；目标宕机时诊断服务仍保持可用。
 
@@ -251,6 +273,16 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 - 常见密码、API Key、Authorization、Token 和 Bearer Token 会在进入模型上下文前脱敏，单条日志也会执行长度限制。
 - Loki 不可用返回 `UNAVAILABLE`，查询成功但没有日志返回 `NO_MATCH`，两者不会混为一谈。
 
+## Prometheus 指标查询边界
+
+- 模型只能提供目标服务、带时区的故障时间和统计窗口，不能提交 PromQL、指标名或任意标签匹配器。
+- 统计窗口限制为 `1m`、`5m`、`15m`、`30m` 和 `1h`；服务标签名由运维配置，标签值执行长度校验和字符串转义。
+- 后端固定查询抓取可用性、HTTP QPS、5xx 错误率、成功率、P95/P99 延迟、进程 CPU、JVM 堆内存和存活线程数。
+- P95/P99 使用服务端直方图 bucket 和 `histogram_quantile` 聚合，因此被观察应用必须暴露 `http_server_requests_seconds_bucket`。
+- 所有指标使用同一个 `observationTime` 查询；提供历史故障时间时，可读取 Prometheus 保留期内该时刻的证据。
+- `UP` 表示抓取和核心 HTTP 指标正常，`DOWN` 表示 `up=0`，`DEGRADED` 表示可抓取但缺少 HTTP 指标，`NO_DATA` 表示未找到目标序列，`UNAVAILABLE` 表示 Prometheus 本身不可访问。
+- API URL、PromQL 和底层错误正文不会进入模型上下文；失败时只返回集中定义的安全异常消息。
+
 ## 阶段进度
 
 | 阶段 | 状态 | 内容 |
@@ -260,14 +292,14 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | Stage 2A | 已完成 | 接入真实 Redis 和 MySQL 只读 Tool |
 | Stage 2B | 已完成 | 接入 RabbitMQ Management API 和安全配置查询 Tool |
 | Stage 3 | 已完成 | Alloy 日志采集、Loki 受控查询和自适应时间窗口 |
-| Stage 4 | 待实现 | Prometheus 指标采集与指标查询 Tool |
+| Stage 4 | 已完成 | Prometheus 指标采集、固定 PromQL 与真实指标查询 Tool |
 | Stage 5 | 待实现 | RAG 运行知识库 |
 | Stage 6 | 待实现 | 受控诊断工作流 |
 | Stage 7 | 待实现 | 故障场景与 Evaluation |
 
 ## 当前边界
 
-- Metrics 仍为固定演示数据；Log、Redis、MySQL 和 RabbitMQ 已连接真实基础设施。
+- Metrics、Log、Redis、MySQL 和 RabbitMQ 均已接入真实只读数据源；Fake Tool 仅保留用于回归测试。
 - REST API 与 JavaFX 客户端均已使用流式诊断；JavaFX 会逐段追加模型回答。
 - 尚未实现会话记忆、RAG 和持久化诊断状态。
 - RootSight 只提供读取、分析和建议，不执行具有副作用的运维操作。

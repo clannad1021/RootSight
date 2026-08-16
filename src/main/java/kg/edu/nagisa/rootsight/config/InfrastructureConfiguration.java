@@ -10,7 +10,8 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
         InfrastructureTargetProperties.class,
         RabbitMqManagementProperties.class,
-        LokiProperties.class
+        LokiProperties.class,
+        PrometheusProperties.class
 })
 public class InfrastructureConfiguration {
 }

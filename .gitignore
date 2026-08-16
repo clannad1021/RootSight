@@ -36,3 +36,6 @@ build/
 /observed-logs/*.log
 /observed-logs/*.txt
 /observed-logs/*.json
+
+### Local observability target overrides ###
+/observability/.env

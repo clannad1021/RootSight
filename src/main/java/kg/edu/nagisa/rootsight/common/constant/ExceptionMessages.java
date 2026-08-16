@@ -25,4 +25,6 @@ public class ExceptionMessages {
     public static final String RABBITMQ_INSPECTION_FAILED = "RabbitMQ Management API 连接或状态查询失败";
     public static final String LOKI_QUERY_FAILED = "Loki 连接或日志查询失败";
     public static final String LOKI_QUERY_INVALID = "日志查询条件不合法";
+    public static final String PROMETHEUS_QUERY_FAILED = "Prometheus 连接或指标查询失败";
+    public static final String PROMETHEUS_QUERY_INVALID = "指标查询条件不合法";
 }

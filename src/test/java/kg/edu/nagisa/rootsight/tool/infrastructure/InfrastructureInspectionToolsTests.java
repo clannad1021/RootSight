@@ -4,15 +4,18 @@ import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
 import kg.edu.nagisa.rootsight.config.InfrastructureTargetProperties;
 import kg.edu.nagisa.rootsight.config.LokiProperties;
+import kg.edu.nagisa.rootsight.config.PrometheusProperties;
 import kg.edu.nagisa.rootsight.config.RabbitMqManagementProperties;
 import kg.edu.nagisa.rootsight.infrastructure.loki.LokiLogClient;
 import kg.edu.nagisa.rootsight.infrastructure.mysql.MySqlStatusClient;
+import kg.edu.nagisa.rootsight.infrastructure.prometheus.PrometheusMetricsClient;
 import kg.edu.nagisa.rootsight.infrastructure.rabbitmq.RabbitMqStatusClient;
 import kg.edu.nagisa.rootsight.infrastructure.redis.RedisStatusClient;
 import kg.edu.nagisa.rootsight.tool.evidence.MySqlStatusEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.LokiLogEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.RabbitMqStatusEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.RedisStatusEvidence;
+import kg.edu.nagisa.rootsight.tool.evidence.PrometheusMetricsEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.SafeConfigurationEvidence;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -122,7 +125,7 @@ class InfrastructureInspectionToolsTests {
         );
         LokiProperties loki = lokiProperties();
         SafeConfigurationInspectionTool tool = new SafeConfigurationInspectionTool(
-                environment, target, rabbit, loki, traceRecorder
+                environment, target, rabbit, loki, prometheusProperties(), traceRecorder
         );
 
         SafeConfigurationEvidence evidence = tool.inspectSafeConfiguration(toolContext);
@@ -131,7 +134,9 @@ class InfrastructureInspectionToolsTests {
         assertThat(evidence.applicationName()).isEqualTo("root-sight-test");
         assertThat(evidence.rabbitMqVhost()).isEqualTo("/test");
         assertThat(evidence.lokiDefaultService()).isEqualTo("observed-target");
-        assertThat(evidence.availableReadOnlyTools()).contains("rabbitmq-status", "loki-logs");
+        assertThat(evidence.prometheusDefaultService()).isEqualTo("observed-target");
+        assertThat(evidence.availableReadOnlyTools())
+                .contains("rabbitmq-status", "loki-logs", "prometheus-metrics");
         assertThat(evidence.excludedSensitiveCategories()).contains("passwords", "environment-variables");
         assertThat(evidence.toString()).doesNotContain("must-not-leak", "rabbit.test", "monitor");
         assertThat(toolNames()).containsExactly("inspect_safe_configuration");
@@ -160,6 +165,29 @@ class InfrastructureInspectionToolsTests {
     }
 
     /**
+     * 验证 Prometheus Tool 返回真实指标证据，并记录查询状态和窗口。
+     */
+    @Test
+    void shouldRecordPrometheusMetricsInspectionTrace() {
+        PrometheusMetricsClient client = mock(PrometheusMetricsClient.class);
+        PrometheusMetricsEvidence expected = new PrometheusMetricsEvidence(
+                "REAL", "test-target", "observed-target", "UP", true, 9,
+                java.time.Instant.parse("2026-08-16T01:00:00Z"), "5m", true,
+                12.5, 2.0, 98.0, 150.0, 240.0, 4.5,
+                1000.0, 2000.0, 18.0, "Prometheus 固定只读指标查询成功"
+        );
+        given(client.queryMetrics(null, null, "5m")).willReturn(expected);
+
+        PrometheusMetricsEvidence actual = new PrometheusMetricsInspectionTool(client, traceRecorder)
+                .queryServiceHttpMetrics(null, null, "5m", toolContext);
+
+        assertThat(actual).isEqualTo(expected);
+        assertThat(toolNames()).containsExactly("query_service_http_metrics");
+        assertThat(traceRecorder.snapshot(diagnosisId).get(0).summary())
+                .contains("[REAL]", "Prometheus=UP", "窗口=5m");
+    }
+
+    /**
      * 创建 Tool 测试使用的 Loki 查询策略配置。
      */
     private static LokiProperties lokiProperties() {
@@ -170,6 +198,17 @@ class InfrastructureInspectionToolsTests {
                 List.of(Duration.ofHours(2), Duration.ofHours(6), Duration.ofHours(24)),
                 Duration.ofDays(7), Duration.ofMinutes(10), Duration.ofMinutes(20),
                 Duration.ofSeconds(30), 20, Duration.ofSeconds(3), Duration.ofSeconds(8)
+        );
+    }
+
+    /**
+     * 创建 Tool 测试使用的 Prometheus 安全查询配置。
+     */
+    private static PrometheusProperties prometheusProperties() {
+        return new PrometheusProperties(
+                "http://prometheus.test", "application", "observed-target", "5m",
+                List.of("1m", "5m", "15m", "30m", "1h"), 120,
+                Duration.ofSeconds(5), Duration.ofSeconds(3), Duration.ofSeconds(8)
         );
     }
 

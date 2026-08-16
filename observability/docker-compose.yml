@@ -38,12 +38,32 @@ services:
       - "12345:12345"
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - ../observed-logs:/var/log/observed:ro
+      # 采集目录由部署侧指定；默认仍是 RootSight 自带的通用 observed-logs 目录。
+      - ${ROOTSIGHT_OBSERVED_LOG_PATH:-../observed-logs}:/var/log/observed:ro
       - alloy-data:/var/lib/alloy/data
     depends_on:
       - loki
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    volumes:
+      # 主配置保持通用，具体被观测地址放在 file_sd 目标文件中。
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      # Linux Docker 环境也可使用与 Docker Desktop 一致的宿主机名称。
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
 volumes:
   loki-data:
   alloy-data:
+  prometheus-data:

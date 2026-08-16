@@ -76,6 +76,22 @@ rootsight:
     context-limit: ${ROOTSIGHT_LOKI_CONTEXT_LIMIT:20}
     connect-timeout: ${ROOTSIGHT_LOKI_CONNECT_TIMEOUT:3s}
     read-timeout: ${ROOTSIGHT_LOKI_READ_TIMEOUT:8s}
+  prometheus:
+    # RootSight 只调用 Prometheus 查询 API；指标写入由目标应用暴露端点、Prometheus 主动抓取完成。
+    url: ${ROOTSIGHT_PROMETHEUS_URL:http://127.0.0.1:9090}
+    service-label: ${ROOTSIGHT_PROMETHEUS_SERVICE_LABEL:application}
+    default-service: ${ROOTSIGHT_PROMETHEUS_DEFAULT_SERVICE:observed-target}
+    default-window: ${ROOTSIGHT_PROMETHEUS_DEFAULT_WINDOW:5m}
+    allowed-windows:
+      - 1m
+      - 5m
+      - 15m
+      - 30m
+      - 1h
+    max-service-length: ${ROOTSIGHT_PROMETHEUS_MAX_SERVICE_LENGTH:120}
+    query-timeout: ${ROOTSIGHT_PROMETHEUS_QUERY_TIMEOUT:5s}
+    connect-timeout: ${ROOTSIGHT_PROMETHEUS_CONNECT_TIMEOUT:3s}
+    read-timeout: ${ROOTSIGHT_PROMETHEUS_READ_TIMEOUT:8s}
 
 management:
   health:

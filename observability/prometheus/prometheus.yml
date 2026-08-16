@@ -1,0 +1,15 @@
+global:
+  # 本地诊断优先及时发现变化；生产环境可按容量需求调大采集间隔。
+  scrape_interval: 5s
+  scrape_timeout: 3s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: observed-application
+    metrics_path: /actuator/prometheus
+    scheme: http
+    # 具体应用地址与标签由部署目标文件维护，主配置不绑定某个业务项目。
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/*.json
+        refresh_interval: 30s

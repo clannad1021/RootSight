@@ -1,8 +1,8 @@
 package kg.edu.nagisa.rootsight.config;
 
-import kg.edu.nagisa.rootsight.tool.fake.FakeMetricsTool;
 import kg.edu.nagisa.rootsight.tool.infrastructure.LokiLogInspectionTool;
 import kg.edu.nagisa.rootsight.tool.infrastructure.MySqlInspectionTool;
+import kg.edu.nagisa.rootsight.tool.infrastructure.PrometheusMetricsInspectionTool;
 import kg.edu.nagisa.rootsight.tool.infrastructure.RabbitMqInspectionTool;
 import kg.edu.nagisa.rootsight.tool.infrastructure.RedisInspectionTool;
 import kg.edu.nagisa.rootsight.tool.infrastructure.SafeConfigurationInspectionTool;
@@ -24,7 +24,7 @@ public class AiConfiguration {
      */
     @Bean
     public ChatClient diagnosisChatClient(ChatClient.Builder builder,
-                                          FakeMetricsTool fakeMetricsTool,
+                                          PrometheusMetricsInspectionTool prometheusMetricsInspectionTool,
                                           RedisInspectionTool redisInspectionTool,
                                           MySqlInspectionTool mySqlInspectionTool,
                                           RabbitMqInspectionTool rabbitMqInspectionTool,
@@ -48,7 +48,7 @@ public class AiConfiguration {
                         - 不使用 Markdown，不输出星号、井号、反引号、斜杠列表、表格或代码围栏等格式符号。
                         使用中文回答。
                         """)
-                .defaultTools(fakeMetricsTool, redisInspectionTool, mySqlInspectionTool,
+                .defaultTools(prometheusMetricsInspectionTool, redisInspectionTool, mySqlInspectionTool,
                         rabbitMqInspectionTool, safeConfigurationInspectionTool, lokiLogInspectionTool)
                 .build();
     }

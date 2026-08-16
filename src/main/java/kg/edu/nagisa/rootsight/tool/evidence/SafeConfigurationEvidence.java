@@ -14,6 +14,7 @@ public record SafeConfigurationEvidence(
         int redisDatabase,
         String rabbitMqVhost,
         String lokiDefaultService,
+        String prometheusDefaultService,
         List<String> availableReadOnlyTools,
         List<String> excludedSensitiveCategories
 ) {
