@@ -63,7 +63,19 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
+  qdrant:
+    image: qdrant/qdrant:v1.18.2
+    ports:
+      # 仅绑定本机；6333 用于健康检查/UI，Spring AI Java 客户端使用 6334 gRPC。
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      # Windows 下使用 Docker 命名卷，避免宿主 bind mount 的文件系统兼容问题。
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
 volumes:
   loki-data:
   alloy-data:
   prometheus-data:
+  qdrant-data:

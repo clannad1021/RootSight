@@ -24,6 +24,13 @@ spring:
   ai:
     model:
       chat: deepseek
+      embedding: openai
+      # RootSight 只借用 OpenAI 兼容的 Embedding 接口，不创建无关的图像、语音和审核模型。
+      image: none
+      audio:
+        transcription: none
+        speech: none
+      moderation: none
     retry:
       # Stage 1A 只做有限重试，避免模型端故障时一个 HTTP 请求长时间占用服务器线程。
       max-attempts: ${ROOTSIGHT_AI_RETRY_MAX_ATTEMPTS:2}
@@ -39,6 +46,23 @@ spring:
         model: ${DEEPSEEK_CHAT_MODEL:deepseek-v4-flash}
         # 诊断回答优先稳定和可复现，暂时不追求创意性。
         temperature: ${DEEPSEEK_CHAT_TEMPERATURE:0.2}
+    openai:
+      # 通用连接参数供 Embedding 自动配置读取；密钥仍然只来自环境变量。
+      base-url: ${SILICONFLOW_BASE_URL:https://api.siliconflow.cn/v1}
+      api-key: ${SILICONFLOW_API_KEY}
+      embedding:
+        # 硅基流动提供 OpenAI 兼容的 /v1/embeddings。
+        # 必须使用普通模型，不能在此处添加 Pro/ 前缀。
+        model: BAAI/bge-m3
+    vectorstore:
+      qdrant:
+        host: ${ROOTSIGHT_QDRANT_HOST:127.0.0.1}
+        port: ${ROOTSIGHT_QDRANT_GRPC_PORT:6334}
+        use-tls: ${ROOTSIGHT_QDRANT_USE_TLS:false}
+        collection-name: ${ROOTSIGHT_QDRANT_COLLECTION:rootsight_knowledge}
+        content-field-name: content
+        # 集合由受保护的启动同步流程创建，避免 Qdrant/Embedding 故障阻止 Agent 启动。
+        initialize-schema: false
 
 rootsight:
   target:
@@ -92,6 +116,29 @@ rootsight:
     query-timeout: ${ROOTSIGHT_PROMETHEUS_QUERY_TIMEOUT:5s}
     connect-timeout: ${ROOTSIGHT_PROMETHEUS_CONNECT_TIMEOUT:3s}
     read-timeout: ${ROOTSIGHT_PROMETHEUS_READ_TIMEOUT:8s}
+  knowledge:
+    enabled: ${ROOTSIGHT_KNOWLEDGE_ENABLED:true}
+    auto-index: ${ROOTSIGHT_KNOWLEDGE_AUTO_INDEX:true}
+    source-root: ${ROOTSIGHT_KNOWLEDGE_SOURCE_ROOT:knowledge-base}
+    system-name: ${ROOTSIGHT_KNOWLEDGE_SYSTEM_NAME:observed-system}
+    include-globs:
+      - README.md
+      - docs/*.md
+      - runbooks/*.md
+    exclude-globs:
+      - docs/interview*.md
+      - docs/*question-bank*.md
+    max-source-files: ${ROOTSIGHT_KNOWLEDGE_MAX_SOURCE_FILES:100}
+    max-file-size: ${ROOTSIGHT_KNOWLEDGE_MAX_FILE_SIZE:1MB}
+    chunk-size: ${ROOTSIGHT_KNOWLEDGE_CHUNK_SIZE:800}
+    min-chunk-size-chars: ${ROOTSIGHT_KNOWLEDGE_MIN_CHUNK_SIZE_CHARS:200}
+    min-chunk-length-to-embed: ${ROOTSIGHT_KNOWLEDGE_MIN_CHUNK_LENGTH_TO_EMBED:20}
+    max-chunks-per-file: ${ROOTSIGHT_KNOWLEDGE_MAX_CHUNKS_PER_FILE:200}
+    top-k: ${ROOTSIGHT_KNOWLEDGE_TOP_K:5}
+    max-top-k: ${ROOTSIGHT_KNOWLEDGE_MAX_TOP_K:10}
+    similarity-threshold: ${ROOTSIGHT_KNOWLEDGE_SIMILARITY_THRESHOLD:0.45}
+    max-query-length: ${ROOTSIGHT_KNOWLEDGE_MAX_QUERY_LENGTH:500}
+    max-snippet-length: ${ROOTSIGHT_KNOWLEDGE_MAX_SNIPPET_LENGTH:1200}
 
 management:
   health:

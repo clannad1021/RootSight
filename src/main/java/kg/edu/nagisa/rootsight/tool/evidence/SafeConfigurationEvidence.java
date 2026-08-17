@@ -15,6 +15,9 @@ public record SafeConfigurationEvidence(
         String rabbitMqVhost,
         String lokiDefaultService,
         String prometheusDefaultService,
+        String knowledgeSystem,
+        String embeddingModel,
+        String vectorStore,
         List<String> availableReadOnlyTools,
         List<String> excludedSensitiveCategories
 ) {

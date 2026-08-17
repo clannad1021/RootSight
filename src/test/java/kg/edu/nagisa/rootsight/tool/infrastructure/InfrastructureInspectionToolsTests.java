@@ -4,6 +4,7 @@ import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
 import kg.edu.nagisa.rootsight.config.InfrastructureTargetProperties;
 import kg.edu.nagisa.rootsight.config.LokiProperties;
+import kg.edu.nagisa.rootsight.config.KnowledgeProperties;
 import kg.edu.nagisa.rootsight.config.PrometheusProperties;
 import kg.edu.nagisa.rootsight.config.RabbitMqManagementProperties;
 import kg.edu.nagisa.rootsight.infrastructure.loki.LokiLogClient;
@@ -11,8 +12,11 @@ import kg.edu.nagisa.rootsight.infrastructure.mysql.MySqlStatusClient;
 import kg.edu.nagisa.rootsight.infrastructure.prometheus.PrometheusMetricsClient;
 import kg.edu.nagisa.rootsight.infrastructure.rabbitmq.RabbitMqStatusClient;
 import kg.edu.nagisa.rootsight.infrastructure.redis.RedisStatusClient;
+import kg.edu.nagisa.rootsight.knowledge.KnowledgeRetrievalService;
 import kg.edu.nagisa.rootsight.tool.evidence.MySqlStatusEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.LokiLogEvidence;
+import kg.edu.nagisa.rootsight.tool.evidence.KnowledgeSearchEvidence;
+import kg.edu.nagisa.rootsight.tool.evidence.KnowledgeSnippetEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.RabbitMqStatusEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.RedisStatusEvidence;
 import kg.edu.nagisa.rootsight.tool.evidence.PrometheusMetricsEvidence;
@@ -24,8 +28,10 @@ import org.springframework.ai.chat.model.ToolContext;
 import java.util.List;
 import java.util.Map;
 import java.time.Duration;
+import java.nio.file.Path;
 
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.util.unit.DataSize;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -115,6 +121,7 @@ class InfrastructureInspectionToolsTests {
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("spring.application.name", "root-sight-test")
                 .withProperty("spring.ai.deepseek.chat.model", "test-model")
+                .withProperty("spring.ai.openai.embedding.model", "BAAI/bge-m3")
                 .withProperty("server.port", "9081")
                 .withProperty("spring.data.redis.database", "3")
                 .withProperty("ROOTSIGHT_RABBITMQ_PASSWORD", "must-not-leak");
@@ -125,7 +132,8 @@ class InfrastructureInspectionToolsTests {
         );
         LokiProperties loki = lokiProperties();
         SafeConfigurationInspectionTool tool = new SafeConfigurationInspectionTool(
-                environment, target, rabbit, loki, prometheusProperties(), traceRecorder
+                environment, target, rabbit, loki, prometheusProperties(),
+                knowledgeProperties(), traceRecorder
         );
 
         SafeConfigurationEvidence evidence = tool.inspectSafeConfiguration(toolContext);
@@ -135,8 +143,11 @@ class InfrastructureInspectionToolsTests {
         assertThat(evidence.rabbitMqVhost()).isEqualTo("/test");
         assertThat(evidence.lokiDefaultService()).isEqualTo("observed-target");
         assertThat(evidence.prometheusDefaultService()).isEqualTo("observed-target");
+        assertThat(evidence.knowledgeSystem()).isEqualTo("observed-system");
+        assertThat(evidence.embeddingModel()).isEqualTo("BAAI/bge-m3");
+        assertThat(evidence.vectorStore()).isEqualTo("qdrant");
         assertThat(evidence.availableReadOnlyTools())
-                .contains("rabbitmq-status", "loki-logs", "prometheus-metrics");
+                .contains("rabbitmq-status", "loki-logs", "prometheus-metrics", "operational-knowledge");
         assertThat(evidence.excludedSensitiveCategories()).contains("passwords", "environment-variables");
         assertThat(evidence.toString()).doesNotContain("must-not-leak", "rabbit.test", "monitor");
         assertThat(toolNames()).containsExactly("inspect_safe_configuration");
@@ -188,6 +199,31 @@ class InfrastructureInspectionToolsTests {
     }
 
     /**
+     * 验证知识 Tool 返回文档证据，并在轨迹中明确标记为非实时知识。
+     */
+    @Test
+    void shouldRecordOperationalKnowledgeTrace() {
+        KnowledgeRetrievalService service = mock(KnowledgeRetrievalService.class);
+        KnowledgeSearchEvidence expected = new KnowledgeSearchEvidence(
+                "REAL", "OPERATIONAL_KNOWLEDGE", false,
+                "test-target", "observed-system", "AVAILABLE", true, 11, 1,
+                List.of(new KnowledgeSnippetEvidence(
+                        "docs/architecture.md", 2, 0.88, "Redis 故障时回源数据库"
+                )),
+                "知识库语义检索成功；结果仅表示系统文档和运行手册知识"
+        );
+        given(service.search("Redis 为什么故障开放", 3)).willReturn(expected);
+
+        KnowledgeSearchEvidence actual = new KnowledgeInspectionTool(service, traceRecorder)
+                .searchOperationalKnowledge("Redis 为什么故障开放", 3, toolContext);
+
+        assertThat(actual).isEqualTo(expected);
+        assertThat(toolNames()).containsExactly("search_operational_knowledge");
+        assertThat(traceRecorder.snapshot(diagnosisId).get(0).summary())
+                .contains("[REAL-KNOWLEDGE]", "命中=1");
+    }
+
+    /**
      * 创建 Tool 测试使用的 Loki 查询策略配置。
      */
     private static LokiProperties lokiProperties() {
@@ -209,6 +245,18 @@ class InfrastructureInspectionToolsTests {
                 "http://prometheus.test", "application", "observed-target", "5m",
                 List.of("1m", "5m", "15m", "30m", "1h"), 120,
                 Duration.ofSeconds(5), Duration.ofSeconds(3), Duration.ofSeconds(8)
+        );
+    }
+
+    /**
+     * 创建 Tool 测试使用的知识来源和检索边界配置。
+     */
+    private static KnowledgeProperties knowledgeProperties() {
+        return new KnowledgeProperties(
+                true, false, Path.of("knowledge-base"), "observed-system",
+                List.of("README.md", "docs/*.md"), List.of("docs/interview*.md"),
+                100, DataSize.ofMegabytes(1), 800, 200, 20, 200,
+                5, 10, 0.45, 500, 1200
         );
     }
 

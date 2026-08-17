@@ -49,6 +49,16 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-deepseek</artifactId>
         </dependency>
+        <!-- Stage 5：复用 OpenAI 兼容协议调用硅基流动的 BAAI/bge-m3 Embedding API。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
+        <!-- Stage 5：将运行知识的向量和元数据持久化到本地 Qdrant。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-qdrant</artifactId>
+        </dependency>
         <!-- Stage 2A：只读检查 MySQL 状态，SQL 固定在 Java 客户端中，不接受模型生成的任意 SQL。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

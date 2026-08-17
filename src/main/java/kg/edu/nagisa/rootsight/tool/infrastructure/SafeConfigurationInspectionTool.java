@@ -3,6 +3,7 @@ package kg.edu.nagisa.rootsight.tool.infrastructure;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
 import kg.edu.nagisa.rootsight.config.InfrastructureTargetProperties;
 import kg.edu.nagisa.rootsight.config.LokiProperties;
+import kg.edu.nagisa.rootsight.config.KnowledgeProperties;
 import kg.edu.nagisa.rootsight.config.PrometheusProperties;
 import kg.edu.nagisa.rootsight.config.RabbitMqManagementProperties;
 import kg.edu.nagisa.rootsight.tool.evidence.SafeConfigurationEvidence;
@@ -22,7 +23,8 @@ import java.util.List;
 public class SafeConfigurationInspectionTool {
 
     private static final List<String> AVAILABLE_READ_ONLY_TOOLS = List.of(
-            "redis-status", "mysql-status", "rabbitmq-status", "loki-logs", "prometheus-metrics"
+            "redis-status", "mysql-status", "rabbitmq-status", "loki-logs",
+            "prometheus-metrics", "operational-knowledge"
     );
     private static final List<String> EXCLUDED_SENSITIVE_CATEGORIES = List.of(
             "passwords", "api-keys", "usernames", "connection-urls", "environment-variables"
@@ -33,13 +35,14 @@ public class SafeConfigurationInspectionTool {
     private final RabbitMqManagementProperties rabbitMqProperties;
     private final LokiProperties lokiProperties;
     private final PrometheusProperties prometheusProperties;
+    private final KnowledgeProperties knowledgeProperties;
     private final ToolCallTraceRecorder traceRecorder;
 
     /**
      * 返回源码固定的安全配置摘要，帮助 Agent 理解当前诊断目标和能力边界。
      */
     @Tool(name = "inspect_safe_configuration",
-            description = "读取当前 RootSight 实例的固定非敏感配置摘要，包括逻辑目标、应用名、模型名、服务端口、Redis 数据库编号、RabbitMQ vhost、Loki/Prometheus 默认服务和可用只读 Tool。不能查询密码、密钥、用户名、连接 URL 或任意环境变量。")
+            description = "读取当前 RootSight 实例的固定非敏感配置摘要，包括逻辑目标、应用名、模型名、服务端口、中间件范围、知识系统和可用只读 Tool。不能查询密码、密钥、用户名、连接 URL 或任意环境变量。")
     public SafeConfigurationEvidence inspectSafeConfiguration(ToolContext toolContext) {
         SafeConfigurationEvidence evidence = new SafeConfigurationEvidence(
                 "REAL",
@@ -51,6 +54,9 @@ public class SafeConfigurationInspectionTool {
                 rabbitMqProperties.vhost(),
                 lokiProperties.defaultService(),
                 prometheusProperties.defaultService(),
+                knowledgeProperties.systemName(),
+                environment.getProperty("spring.ai.openai.embedding.model", "unknown"),
+                "qdrant",
                 AVAILABLE_READ_ONLY_TOOLS,
                 EXCLUDED_SENSITIVE_CATEGORIES
         );

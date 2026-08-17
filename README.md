@@ -6,7 +6,7 @@ RootSight 是一个面向通用软件系统的轻量级智能运维故障诊断 
 
 ## 当前阶段
 
-项目已完成 Stage 1A、Stage 1B、Stage 2A、Stage 2B、Stage 3 和 Stage 4：
+项目已完成 Stage 1A、Stage 1B、Stage 2A、Stage 2B、Stage 3、Stage 4 和 Stage 5：
 
 - 通过 Spring AI `ChatClient` 调用 DeepSeek。
 - 提供统一的故障诊断 REST API。
@@ -19,12 +19,15 @@ RootSight 是一个面向通用软件系统的轻量级智能运维故障诊断 
 - LogQL 由后端根据结构化参数构造，模型不能提交任意 LogQL。
 - 通过 Prometheus 抓取目标应用的标准 Micrometer 指标，并提供真实指标查询 Tool。
 - PromQL 由后端固定生成，只允许模型选择服务、故障时间和白名单统计窗口。
+- 使用硅基流动普通 `BAAI/bge-m3` Embedding 和本地 Qdrant 建立运行知识库。
+- 启动时按内容版本同步 README、运维文档和 Runbook，同版本不会重复写入全部向量。
+- 提供受控的运行知识检索 Tool，并明确区分文档知识与实时运行证据。
 - 提供固定白名单的安全配置 Tool，不允许按任意配置键读取环境信息。
 - 通过 SSE 流式返回模型正文，客户端无需等待完整回答生成。
 - 在流结束事件中返回本次实际执行的 Tool 调用轨迹。
 - 使用固定的纯文本报告层级，并在展示前清理 Markdown 格式噪声。
 
-Tool 返回的 `evidenceSource` 会明确标记证据来源：`DEMO` 表示固定演示数据，`REAL` 表示从当前配置的真实基础设施读取。模型不得把演示证据当作生产环境事实。
+Tool 返回的 `evidenceSource` 会明确标记证据来源：`DEMO` 表示固定演示数据，`REAL` 表示从当前配置的数据源读取。运行知识还会返回 `evidenceKind=OPERATIONAL_KNOWLEDGE` 和 `realtimeEvidence=false`，模型不得把文档知识或演示证据当作当前生产状态。
 
 ## 诊断流程
 
@@ -54,12 +57,12 @@ COMPLETED 事件返回 Tool 调用轨迹
 
 - Java 17
 - Spring Boot 4.1.0
-- Spring AI 2.0.0、Project Reactor
+- Spring AI 2.0.0、Project Reactor、硅基流动 `BAAI/bge-m3`
 - DeepSeek V4 Flash
 - Spring JDBC、MySQL Connector/J
 - Spring Data Redis、Lettuce
 - Spring `RestClient`、RabbitMQ Management HTTP API
-- Grafana Loki 3.7.2、Grafana Alloy 1.18.0、Prometheus 3.13.1、Docker Compose
+- Grafana Loki 3.7.2、Grafana Alloy 1.18.0、Prometheus 3.13.1、Qdrant 1.18.2、Docker Compose
 - JavaFX 21
 - Maven
 - Lombok
@@ -79,12 +82,13 @@ src/main/java/kg/edu/nagisa/rootsight
 │   ├── prometheus Prometheus 固定指标查询客户端
 │   ├── rabbitmq RabbitMQ Management API 状态客户端
 │   └── redis    Redis PING/INFO 状态客户端
+├── knowledge   本地知识文件加载、分块、版本同步和语义检索
 ├── desktop     JavaFX 桌面客户端
 └── tool
     ├── evidence        Tool 返回的结构化证据
     ├── fake            Stage 1B 保留的模拟 Tool
     └── infrastructure  Stage 2A～4 的真实基础设施、日志、指标与安全配置 Tool
-observability           Loki、Alloy、Prometheus 与 Docker Compose 配置
+observability           Loki、Alloy、Prometheus、Qdrant 与 Docker Compose 配置
 observed-logs           Alloy 允许读取的目标应用日志目录
 ```
 
@@ -96,12 +100,14 @@ observed-logs           Alloy 允许读取的目标应用日志目录
 - 可用的 DeepSeek API Key
 - 可访问的 Redis、MySQL 和启用了 Management 插件的 RabbitMQ；建议使用只读/监控账号
 - 被观察应用需暴露 Prometheus 格式指标；Spring Boot 应用可使用 Actuator 和 Micrometer Registry
-- Docker Desktop 与 Docker Compose，用于运行本地 Loki、Alloy 和 Prometheus
+- 可用的硅基流动 API Key，用于普通 `BAAI/bge-m3` Embedding
+- Docker Desktop 与 Docker Compose，用于运行本地 Loki、Alloy、Prometheus 和 Qdrant
 
 将 API Key 配置到环境变量，不要写入 `application.yml` 或提交到 Git：
 
 ```powershell
 $env:DEEPSEEK_API_KEY="your-api-key"
+$env:SILICONFLOW_API_KEY="your-siliconflow-api-key"
 ```
 
 启动项目：
@@ -112,7 +118,7 @@ $env:DEEPSEEK_API_KEY="your-api-key"
 
 默认端口为 `8081`。可通过 `ROOTSIGHT_SERVER_PORT` 环境变量覆盖。
 
-### 启动日志与指标采集
+### 启动日志、指标与向量数据库
 
 将需要观察的应用日志写入项目根目录的 `observed-logs`。支持 `.log`、`.txt` 和 `.json` 文件，真实日志文件不会进入 Git。
 
@@ -120,7 +126,7 @@ $env:DEEPSEEK_API_KEY="your-api-key"
 
 当前本地 `observability/.env` 已把 Alloy 的只读日志目录指向 `D:/ShortPan/logs`，该文件不会提交 Git。其他环境可从 `.env.example` 复制并修改。
 
-启动 Loki、Alloy 和 Prometheus：
+启动 Loki、Alloy、Prometheus 和 Qdrant：
 
 ```powershell
 docker compose --env-file observability/.env -f observability/docker-compose.yml up -d
@@ -143,13 +149,25 @@ docker compose --env-file observability/.env -f observability/docker-compose.yml
 Invoke-WebRequest http://127.0.0.1:3100/ready
 Invoke-WebRequest http://127.0.0.1:9090/-/ready
 Invoke-RestMethod http://127.0.0.1:9090/api/v1/targets
+Invoke-RestMethod http://127.0.0.1:6333/
 ```
 
-停止日志基础设施：
+停止本地观测与向量基础设施：
 
 ```powershell
 docker compose --env-file observability/.env -f observability/docker-compose.yml down
 ```
+
+### 配置运行知识源
+
+知识源目录与被观察系统通过环境变量配置，Java 代码不绑定 ShortPan。目录默认读取根目录 `README.md`、`docs/*.md` 和 `runbooks/*.md`，并排除面试题等不属于运行知识的文档：
+
+```powershell
+$env:ROOTSIGHT_KNOWLEDGE_SOURCE_ROOT="D:/ShortPan"
+$env:ROOTSIGHT_KNOWLEDGE_SYSTEM_NAME="short-pan"
+```
+
+首次启动会创建 `rootsight_knowledge` 集合并完成分块、Embedding 和写入。此后内容版本未变化时返回 `UP_TO_DATE`；文档发生变化时先写入完整新版本，再清理同一系统的旧版本，避免更新中途留下不完整知识库。
 
 启动 JavaFX 桌面客户端：
 
@@ -202,6 +220,8 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek API 地址 |
 | `DEEPSEEK_CHAT_MODEL` | `deepseek-v4-flash` | 对话模型 |
 | `DEEPSEEK_CHAT_TEMPERATURE` | `0.2` | 模型采样温度 |
+| `SILICONFLOW_API_KEY` | 无 | 硅基流动 Embedding API 密钥，必须配置且不会写入日志 |
+| `SILICONFLOW_BASE_URL` | `https://api.siliconflow.cn/v1` | 硅基流动 OpenAI 兼容 API 基址 |
 | `ROOTSIGHT_SERVER_PORT` | `8081` | RootSight 服务端口 |
 | `ROOTSIGHT_AI_RETRY_MAX_ATTEMPTS` | `2` | 模型调用最大尝试次数 |
 | `ROOTSIGHT_TARGET_NAME` | `default-target` | 当前基础设施目标的逻辑名称 |
@@ -249,6 +269,16 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | `ROOTSIGHT_PROMETHEUS_READ_TIMEOUT` | `8s` | Prometheus 查询读取超时 |
 | `ROOTSIGHT_OBSERVED_LOG_PATH` | `../observed-logs` | Alloy 容器只读挂载的宿主日志目录 |
 | `ROOTSIGHT_OBSERVED_SERVICE` | `observed-target` | Alloy 写入 Loki 的 `service_name` 标签值 |
+| `ROOTSIGHT_QDRANT_HOST` | `127.0.0.1` | Qdrant gRPC 地址 |
+| `ROOTSIGHT_QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC 端口 |
+| `ROOTSIGHT_QDRANT_USE_TLS` | `false` | 是否为 Qdrant gRPC 启用 TLS |
+| `ROOTSIGHT_QDRANT_COLLECTION` | `rootsight_knowledge` | 运行知识集合名 |
+| `ROOTSIGHT_KNOWLEDGE_SOURCE_ROOT` | `knowledge-base` | 通用运行知识源根目录 |
+| `ROOTSIGHT_KNOWLEDGE_SYSTEM_NAME` | `observed-system` | 写入元数据并用于隔离检索的逻辑系统名 |
+| `ROOTSIGHT_KNOWLEDGE_ENABLED` | `true` | 是否启用运行知识能力 |
+| `ROOTSIGHT_KNOWLEDGE_AUTO_INDEX` | `true` | 是否在应用启动后自动同步知识 |
+| `ROOTSIGHT_KNOWLEDGE_TOP_K` | `5` | 默认返回的相似知识分块数，代码上限为 10 |
+| `ROOTSIGHT_KNOWLEDGE_SIMILARITY_THRESHOLD` | `0.45` | 语义检索相似度阈值 |
 
 ## 基础设施只读边界
 
@@ -283,6 +313,18 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 - `UP` 表示抓取和核心 HTTP 指标正常，`DOWN` 表示 `up=0`，`DEGRADED` 表示可抓取但缺少 HTTP 指标，`NO_DATA` 表示未找到目标序列，`UNAVAILABLE` 表示 Prometheus 本身不可访问。
 - API URL、PromQL 和底层错误正文不会进入模型上下文；失败时只返回集中定义的安全异常消息。
 
+## RAG 运行知识边界
+
+- Embedding 模型在配置中固定为普通 `BAAI/bge-m3`，没有使用 `Pro/BAAI/bge-m3`；向量维度为 1024。
+- Qdrant 由本地 Docker Compose 运行，REST 和 gRPC 端口只绑定 `127.0.0.1`，数据保存在命名卷中。
+- 只有白名单 Markdown 路径会被读取，文件数量、单文件大小、查询长度、分块数量、Top K 和返回片段长度均有上限。
+- 面试题和 question-bank 文档默认排除；发送给模型的来源仅为知识根目录下的相对路径，不暴露宿主机绝对路径。
+- 每个分块使用确定性 UUID，并带有 `system_name`、`source`、`index_version` 和 `chunk_index` 元数据。
+- 检索必须按 `system_name` 过滤，知识 Tool 不接受任意 Qdrant 过滤器或数据库查询表达式。
+- Agent 将知识片段视为待核对资料而不是系统指令，忽略文档中试图改变角色、绕过规则或诱导 Tool 调用的内容。
+- 知识检索结果是设计说明、故障经验和 Runbook，不代表目标当前状态；诊断结论应与 Metrics、Log 和基础设施 Tool 的实时证据分别陈述。
+- 知识源、Embedding 或 Qdrant 不可用时返回安全的 `UNAVAILABLE` 证据；启动同步失败只降低 RAG 能力，不泄露密钥、URL、绝对路径或底层异常。
+
 ## 阶段进度
 
 | 阶段 | 状态 | 内容 |
@@ -293,7 +335,7 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | Stage 2B | 已完成 | 接入 RabbitMQ Management API 和安全配置查询 Tool |
 | Stage 3 | 已完成 | Alloy 日志采集、Loki 受控查询和自适应时间窗口 |
 | Stage 4 | 已完成 | Prometheus 指标采集、固定 PromQL 与真实指标查询 Tool |
-| Stage 5 | 待实现 | RAG 运行知识库 |
+| Stage 5 | 已完成 | 硅基流动 Embedding、本地 Qdrant、版本化知识同步与受控 RAG Tool |
 | Stage 6 | 待实现 | 受控诊断工作流 |
 | Stage 7 | 待实现 | 故障场景与 Evaluation |
 
@@ -301,5 +343,5 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 
 - Metrics、Log、Redis、MySQL 和 RabbitMQ 均已接入真实只读数据源；Fake Tool 仅保留用于回归测试。
 - REST API 与 JavaFX 客户端均已使用流式诊断；JavaFX 会逐段追加模型回答。
-- 尚未实现会话记忆、RAG 和持久化诊断状态。
+- 尚未实现会话记忆、持久化诊断状态和 Stage 6 的受控诊断工作流。
 - RootSight 只提供读取、分析和建议，不执行具有副作用的运维操作。

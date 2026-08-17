@@ -27,4 +27,9 @@ public class ExceptionMessages {
     public static final String LOKI_QUERY_INVALID = "日志查询条件不合法";
     public static final String PROMETHEUS_QUERY_FAILED = "Prometheus 连接或指标查询失败";
     public static final String PROMETHEUS_QUERY_INVALID = "指标查询条件不合法";
+    public static final String KNOWLEDGE_SOURCE_UNAVAILABLE = "运行知识源目录不可用";
+    public static final String KNOWLEDGE_SOURCE_EMPTY = "运行知识源中没有可索引文档";
+    public static final String KNOWLEDGE_INDEX_FAILED = "运行知识索引同步失败";
+    public static final String KNOWLEDGE_QUERY_FAILED = "运行知识库连接或检索失败";
+    public static final String KNOWLEDGE_QUERY_INVALID = "运行知识检索条件不合法";
 }
