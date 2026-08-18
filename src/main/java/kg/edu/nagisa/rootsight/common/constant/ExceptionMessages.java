@@ -10,6 +10,23 @@ import lombok.experimental.UtilityClass;
 @UtilityClass
 public class ExceptionMessages {
 
+    public static final String EVALUATION_SCENARIOS_REQUIRED = "评测场景不能为空";
+    public static final String EVALUATION_SCENARIO_ID_REQUIRED = "评测场景 ID 不能为空";
+    public static final String EVALUATION_SCENARIO_NAME_REQUIRED = "评测场景名称不能为空";
+    public static final String EVALUATION_QUESTION_REQUIRED = "评测问题不能为空";
+    public static final String EVALUATION_REQUIRED_TOOLS_REQUIRED = "评测场景必须声明至少一个必需 Tool";
+    public static final String EVALUATION_ROOT_CAUSE_KEYWORDS_REQUIRED = "评测场景必须声明根因关键词组";
+    public static final String EVALUATION_REQUEST_INVALID_TITLE = "评测请求不合法";
+    public static final String EVALUATION_SCENARIO_LIMIT_EXCEEDED = "评测场景数量超过允许上限";
+    public static final String EVALUATION_SCENARIO_ID_DUPLICATED = "评测场景 ID 不能重复";
+    public static final String EVALUATION_SCENARIO_INVALID = "评测场景定义不完整";
+    public static final String EVALUATION_TOOL_DEFINITION_INVALID = "评测 Tool 定义为空或超过允许上限";
+    public static final String EVALUATION_KEYWORD_DEFINITION_INVALID = "根因关键词组为空或超过允许上限";
+    public static final String EVALUATION_DURATION_INVALID = "评测最大耗时必须大于 0";
+    public static final String EVALUATION_TOOL_F1_INVALID = "评测 Tool F1 阈值必须在 0 到 1 之间";
+    public static final String EVALUATION_REQUEST_TIMEOUT = "批量评测超过允许的总时限";
+    public static final String EVALUATION_TIMEOUT_TITLE = "评测请求超时";
+
     public static final String QUESTION_REQUIRED = "问题不能为空";
     public static final String QUESTION_TOO_LONG = "问题不能超过 2000 个字符";
     public static final String INVALID_REQUEST = "请求参数不合法";

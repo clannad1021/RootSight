@@ -1,9 +1,11 @@
 package kg.edu.nagisa.rootsight;
 
+import kg.edu.nagisa.rootsight.api.EvaluationController;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -22,6 +24,9 @@ class RootSightApplicationTests {
 
     @Autowired
     private Environment environment;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     /**
      * 验证完整 Spring 容器可以加载知识库与诊断工作流组件。
@@ -50,6 +55,16 @@ class RootSightApplicationTests {
         assertThat(environment.getProperty(
                 "rootsight.diagnosis.workflow.max-tool-calls", Integer.class
         )).isEqualTo(8);
+    }
+
+    /**
+     * 验证批量 Evaluation 入口默认不注册，避免普通启动意外产生真实模型调用和费用。
+     */
+    @Test
+    void shouldKeepEvaluationEndpointDisabledByDefault() {
+        assertThat(applicationContext.getBeansOfType(EvaluationController.class)).isEmpty();
+        assertThat(environment.getProperty("rootsight.evaluation.enabled", Boolean.class))
+                .isFalse();
     }
 
 }

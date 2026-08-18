@@ -71,6 +71,16 @@ rootsight:
       timeout: ${ROOTSIGHT_DIAGNOSIS_TIMEOUT:90s}
       # 该预算在每个真实 Tool 执行前原子预占，防止模型重复取证形成无界循环。
       max-tool-calls: ${ROOTSIGHT_DIAGNOSIS_MAX_TOOL_CALLS:8}
+  evaluation:
+    # 批量评测会产生真实模型调用和基础设施查询，必须显式开启后才注册 HTTP 入口。
+    enabled: ${ROOTSIGHT_EVALUATION_ENABLED:false}
+    max-scenarios: ${ROOTSIGHT_EVALUATION_MAX_SCENARIOS:10}
+    max-tools-per-scenario: ${ROOTSIGHT_EVALUATION_MAX_TOOLS_PER_SCENARIO:10}
+    max-keyword-groups: ${ROOTSIGHT_EVALUATION_MAX_KEYWORD_GROUPS:10}
+    max-keywords-per-group: ${ROOTSIGHT_EVALUATION_MAX_KEYWORDS_PER_GROUP:10}
+    max-answer-length: ${ROOTSIGHT_EVALUATION_MAX_ANSWER_LENGTH:20000}
+    default-max-duration: ${ROOTSIGHT_EVALUATION_DEFAULT_MAX_DURATION:90s}
+    default-min-tool-f1: ${ROOTSIGHT_EVALUATION_DEFAULT_MIN_TOOL_F1:0.75}
   target:
     # 当前进程连接的一组基础设施使用一个逻辑名称，后续可演进为多目标配置。
     name: ${ROOTSIGHT_TARGET_NAME:default-target}

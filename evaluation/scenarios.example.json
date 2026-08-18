@@ -1,0 +1,65 @@
+{
+  "scenarios": [
+    {
+      "id": "redis-unavailable",
+      "name": "Redis 不可连接",
+      "question": "当前被观测系统访问 Redis 失败，请定位根因并给出处置建议。",
+      "requiredTools": [
+        "inspect_redis_status"
+      ],
+      "allowedTools": [
+        "query_application_logs",
+        "query_service_http_metrics",
+        "inspect_safe_configuration",
+        "search_operational_knowledge"
+      ],
+      "rootCauseKeywordGroups": [
+        ["Redis"],
+        ["DOWN", "不可用", "无法连接", "连接失败"]
+      ],
+      "maxDurationMs": 90000,
+      "minToolF1": 0.75
+    },
+    {
+      "id": "rabbitmq-consumer-stopped",
+      "name": "RabbitMQ 消费者停止",
+      "question": "消息在 RabbitMQ 中持续积压且没有被消费，请定位根因并给出处置建议。",
+      "requiredTools": [
+        "inspect_rabbitmq_status"
+      ],
+      "allowedTools": [
+        "query_application_logs",
+        "query_service_http_metrics",
+        "inspect_safe_configuration",
+        "search_operational_knowledge"
+      ],
+      "rootCauseKeywordGroups": [
+        ["RabbitMQ"],
+        ["consumer", "消费者"],
+        ["停止", "缺失", "未运行", "0"]
+      ],
+      "maxDurationMs": 90000,
+      "minToolF1": 0.75
+    },
+    {
+      "id": "mysql-unavailable",
+      "name": "MySQL 连接异常",
+      "question": "当前被观测系统访问 MySQL 失败，请定位根因并给出处置建议。",
+      "requiredTools": [
+        "inspect_mysql_status"
+      ],
+      "allowedTools": [
+        "query_application_logs",
+        "query_service_http_metrics",
+        "inspect_safe_configuration",
+        "search_operational_knowledge"
+      ],
+      "rootCauseKeywordGroups": [
+        ["MySQL"],
+        ["DOWN", "不可用", "无法连接", "连接失败"]
+      ],
+      "maxDurationMs": 90000,
+      "minToolF1": 0.75
+    }
+  ]
+}

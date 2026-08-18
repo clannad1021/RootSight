@@ -39,3 +39,6 @@ build/
 
 ### Local observability target overrides ###
 /observability/.env
+
+### Local Evaluation reports ###
+/evaluation/evaluation-report*.json

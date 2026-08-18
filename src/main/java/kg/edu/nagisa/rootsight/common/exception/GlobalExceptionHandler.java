@@ -36,4 +36,14 @@ public class GlobalExceptionHandler {
         problem.setTitle(ExceptionMessages.DIAGNOSIS_UNAVAILABLE_TITLE);
         return problem;
     }
+
+    /**
+     * 将评测场景之间的业务约束错误转换为稳定的 400 Problem Detail 响应。
+     */
+    @ExceptionHandler(EvaluationRequestException.class)
+    public ProblemDetail handleEvaluationRequestException(EvaluationRequestException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle(ExceptionMessages.EVALUATION_REQUEST_INVALID_TITLE);
+        return problem;
+    }
 }
