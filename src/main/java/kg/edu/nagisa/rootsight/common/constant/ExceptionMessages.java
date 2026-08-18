@@ -19,6 +19,11 @@ public class ExceptionMessages {
     public static final String DIAGNOSIS_UNAVAILABLE_TITLE = "诊断服务暂时不可用";
     public static final String DIAGNOSIS_CONTEXT_MISSING = "诊断 Tool 缺少请求上下文";
     public static final String DIAGNOSIS_TRACE_NOT_FOUND = "诊断 Tool 对应的轨迹会话不存在";
+    public static final String DIAGNOSIS_WORKFLOW_ALREADY_EXISTS = "诊断工作流已经存在";
+    public static final String DIAGNOSIS_WORKFLOW_NOT_FOUND = "诊断工作流不存在";
+    public static final String DIAGNOSIS_WORKFLOW_TERMINATED = "诊断工作流已经结束";
+    public static final String DIAGNOSIS_WORKFLOW_TIMEOUT = "诊断超过允许的总时限，请缩小问题范围后重试";
+    public static final String DIAGNOSIS_TOOL_LIMIT_REACHED = "诊断已达到 Tool 调用次数上限，请缩小问题范围后重试";
     public static final String MYSQL_INSPECTION_FAILED = "MySQL 连接或状态查询失败";
     public static final String REDIS_INSPECTION_FAILED = "Redis 连接或状态查询失败";
     public static final String REDIS_INFO_UNAVAILABLE = "Redis PING 成功，但当前账号无权读取 INFO 指标";

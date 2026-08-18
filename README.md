@@ -6,7 +6,7 @@ RootSight 是一个面向通用软件系统的轻量级智能运维故障诊断 
 
 ## 当前阶段
 
-项目已完成 Stage 1A、Stage 1B、Stage 2A、Stage 2B、Stage 3、Stage 4 和 Stage 5：
+项目已完成 Stage 1A、Stage 1B、Stage 2A、Stage 2B、Stage 3、Stage 4、Stage 5 和 Stage 6：
 
 - 通过 Spring AI `ChatClient` 调用 DeepSeek。
 - 提供统一的故障诊断 REST API。
@@ -22,6 +22,9 @@ RootSight 是一个面向通用软件系统的轻量级智能运维故障诊断 
 - 使用硅基流动普通 `BAAI/bge-m3` Embedding 和本地 Qdrant 建立运行知识库。
 - 启动时按内容版本同步 README、运维文档和 Runbook，同版本不会重复写入全部向量。
 - 提供受控的运行知识检索 Tool，并明确区分文档知识与实时运行证据。
+- 使用请求级有限状态机约束“规划、取证、归纳、完成/失败”诊断步骤。
+- 对整次诊断设置总超时，并在每个真实 Tool 执行前原子预占调用预算。
+- 通过 SSE 返回工作流状态、已使用 Tool 次数、调用上限和诊断耗时。
 - 提供固定白名单的安全配置 Tool，不允许按任意配置键读取环境信息。
 - 通过 SSE 流式返回模型正文，客户端无需等待完整回答生成。
 - 在流结束事件中返回本次实际执行的 Tool 调用轨迹。
@@ -38,20 +41,26 @@ DiagnosisController / SSE
     ↓
 DiagnosisService
     ↓
+PLANNING：理解问题并规划需要的证据
+    ↓
 ChatClient / DeepSeek
     ↓
 模型根据问题自主选择 Tool
+    ↓
+EVIDENCE_COLLECTION：执行受预算保护的只读 Tool
     ↓
 Java Tool 返回结构化证据
     ↓
 模型判断是否需要继续取证
     ↓
+SYNTHESIS：停止 Tool 调用并归纳证据
+    ↓
 逐块返回纯文本诊断结论
     ↓
-COMPLETED 事件返回 Tool 调用轨迹
+COMPLETED/ERROR 返回最终状态与 Tool 调用轨迹
 ```
 
-模型没有固定的 Tool 调用顺序。它应根据用户问题、Tool 用途和已经取得的证据，决定调用哪些 Tool、以什么顺序调用以及何时停止取证。
+模型没有固定的 Tool 调用顺序。它仍根据用户问题、Tool 用途和已经取得的证据决定调用哪些 Tool，但必须遵守统一诊断步骤、总时限和调用预算。
 
 ## 技术栈
 
@@ -72,7 +81,7 @@ COMPLETED 事件返回 Tool 调用轨迹
 
 ```text
 src/main/java/kg/edu/nagisa/rootsight
-├── agent       诊断服务、诊断结果和 Tool 调用轨迹
+├── agent       诊断服务、诊断结果、Tool 轨迹与请求级工作流状态机
 ├── api         REST 接口及请求响应 DTO
 ├── common      公共常量和统一异常处理
 ├── config      ChatClient 与 AI 配置
@@ -193,22 +202,26 @@ curl.exe -N `
   --data-raw $body
 ```
 
-响应为三类 SSE 事件：
+响应为四类 SSE 事件：
 
 ```text
-event:content
-data:{"type":"CONTENT","content":"诊断结论：\n","toolCalls":[]}
+event:status
+data:{"type":"STATUS","content":"","toolCalls":[],"workflow":{"state":"PLANNING","toolCallCount":0,"maxToolCalls":8,"elapsedMs":1}}
 
 event:content
-data:{"type":"CONTENT","content":"当前目标基础设施可访问。","toolCalls":[]}
+data:{"type":"CONTENT","content":"诊断结论：\n","toolCalls":[],"workflow":null}
+
+event:content
+data:{"type":"CONTENT","content":"当前目标基础设施可访问。","toolCalls":[],"workflow":null}
 
 event:completed
-data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_status","summary":"..."}]}
+data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_status","summary":"..."}],"workflow":{"state":"COMPLETED","toolCallCount":1,"maxToolCalls":8,"elapsedMs":3200}}
 ```
 
+- `STATUS`：工作流状态变化或 Tool 预算进度，状态包括 `PLANNING`、`EVIDENCE_COLLECTION` 和 `SYNTHESIS`。
 - `CONTENT`：模型正文增量，前端收到后直接追加显示。
-- `COMPLETED`：正文结束，并携带完整 Tool 调用轨迹。
-- `ERROR`：流式调用失败时返回经过脱敏的错误消息；已经产生的 Tool 轨迹会一并保留。
+- `COMPLETED`：正文结束，并携带完整 Tool 调用轨迹和最终工作流快照。
+- `ERROR`：流式调用失败、总超时或超过 Tool 上限时返回安全消息；已经完成的 Tool 轨迹和对应终态会一并保留。
 
 模型最终报告固定使用“诊断结论、关键证据、推理依据、处理建议”四层纯文本结构。服务端会过滤正式报告前的过程性前言，防御性移除星号、井号、代码围栏和行首装饰性斜杠，但会保留 `/api/orders`、`HTTP/2` 等正文中的有效斜杠。连续 token 会在约 40ms 的小窗口内合并，以减少前端刷新次数，同时保持实时输出。
 
@@ -224,6 +237,8 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | `SILICONFLOW_BASE_URL` | `https://api.siliconflow.cn/v1` | 硅基流动 OpenAI 兼容 API 基址 |
 | `ROOTSIGHT_SERVER_PORT` | `8081` | RootSight 服务端口 |
 | `ROOTSIGHT_AI_RETRY_MAX_ATTEMPTS` | `2` | 模型调用最大尝试次数 |
+| `ROOTSIGHT_DIAGNOSIS_TIMEOUT` | `90s` | 单次诊断从规划到报告结束的总时限 |
+| `ROOTSIGHT_DIAGNOSIS_MAX_TOOL_CALLS` | `8` | 单次诊断允许执行的真实 Tool 调用上限 |
 | `ROOTSIGHT_TARGET_NAME` | `default-target` | 当前基础设施目标的逻辑名称 |
 | `ROOTSIGHT_DB_URL` | `jdbc:mysql://localhost:3306/` | MySQL JDBC 地址，不要求绑定业务数据库 |
 | `ROOTSIGHT_DB_USERNAME` | `readonly` | MySQL 只读账号 |
@@ -325,6 +340,17 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 - 知识检索结果是设计说明、故障经验和 Runbook，不代表目标当前状态；诊断结论应与 Metrics、Log 和基础设施 Tool 的实时证据分别陈述。
 - 知识源、Embedding 或 Qdrant 不可用时返回安全的 `UNAVAILABLE` 证据；启动同步失败只降低 RAG 能力，不泄露密钥、URL、绝对路径或底层异常。
 
+## 受控诊断工作流边界
+
+- 工作流状态依次覆盖规划、证据收集、结论归纳以及完成、失败、超时、Tool 超限等终态。
+- 状态以诊断 ID 隔离并存放在并发 Map 中，不使用 `ThreadLocal`，因此流式线程切换和并发请求不会互相污染。
+- Tool 次数在访问外部服务前原子预占；达到上限后的调用会被拒绝，不会先访问 Redis、MySQL、RabbitMQ、Loki、Prometheus 或 Qdrant。
+- 总超时覆盖模型规划、全部 Tool 取证和最终报告生成，不等同于各基础设施客户端自己的连接或读取超时。
+- 超时和 Tool 超限通过 SSE `ERROR` 事件返回集中定义的安全消息，不向客户端暴露模型供应商异常或内部调用栈。
+- 终止事件包含 `toolCallCount`、`maxToolCalls` 和 `elapsedMs`，便于 Stage 7 Evaluation 统计调用效率和诊断耗时。
+- 状态机只规定诊断阶段和资源边界，不建立“某种故障必须调用某组 Tool”的硬编码映射；具体 Tool 与顺序仍由模型基于证据决定。
+- 请求结束或客户端断开后立即清理内存状态；当前不提供跨请求恢复和持久化 Checkpoint。
+
 ## 阶段进度
 
 | 阶段 | 状态 | 内容 |
@@ -336,12 +362,12 @@ data:{"type":"COMPLETED","content":"","toolCalls":[{"toolName":"inspect_mysql_st
 | Stage 3 | 已完成 | Alloy 日志采集、Loki 受控查询和自适应时间窗口 |
 | Stage 4 | 已完成 | Prometheus 指标采集、固定 PromQL 与真实指标查询 Tool |
 | Stage 5 | 已完成 | 硅基流动 Embedding、本地 Qdrant、版本化知识同步与受控 RAG Tool |
-| Stage 6 | 待实现 | 受控诊断工作流 |
+| Stage 6 | 已完成 | 请求级诊断状态机、SSE 状态、总超时和原子 Tool 调用预算 |
 | Stage 7 | 待实现 | 故障场景与 Evaluation |
 
 ## 当前边界
 
 - Metrics、Log、Redis、MySQL 和 RabbitMQ 均已接入真实只读数据源；Fake Tool 仅保留用于回归测试。
 - REST API 与 JavaFX 客户端均已使用流式诊断；JavaFX 会逐段追加模型回答。
-- 尚未实现会话记忆、持久化诊断状态和 Stage 6 的受控诊断工作流。
+- 尚未实现会话记忆、持久化诊断状态和跨请求 Checkpoint；Stage 6 状态只在单次请求生命周期内存在。
 - RootSight 只提供读取、分析和建议，不执行具有副作用的运维操作。

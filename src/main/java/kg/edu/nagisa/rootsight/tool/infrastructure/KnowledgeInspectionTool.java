@@ -1,6 +1,7 @@
 package kg.edu.nagisa.rootsight.tool.infrastructure;
 
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
+import kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowCoordinator;
 import kg.edu.nagisa.rootsight.knowledge.KnowledgeRetrievalService;
 import kg.edu.nagisa.rootsight.tool.evidence.KnowledgeSearchEvidence;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class KnowledgeInspectionTool {
 
     private final KnowledgeRetrievalService retrievalService;
     private final ToolCallTraceRecorder traceRecorder;
+    private final DiagnosisWorkflowCoordinator workflowCoordinator;
 
     /**
      * 按自然语言检索运行知识，并明确要求模型不能把文档内容冒充当前实时状态。
@@ -31,6 +33,7 @@ public class KnowledgeInspectionTool {
                     description = "可选返回片段数；后端会限制在安全上限以内")
             Integer topK,
             ToolContext toolContext) {
+        workflowCoordinator.beforeToolCall(toolContext);
         KnowledgeSearchEvidence evidence = retrievalService.search(query, topK);
         traceRecorder.record(toolContext, "search_operational_knowledge",
                 "[REAL-KNOWLEDGE] 目标=" + evidence.targetName()

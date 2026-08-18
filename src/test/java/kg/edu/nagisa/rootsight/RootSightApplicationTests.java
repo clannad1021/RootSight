@@ -24,7 +24,7 @@ class RootSightApplicationTests {
     private Environment environment;
 
     /**
-     * 验证完整 Spring 容器可以加载新增的知识库组件。
+     * 验证完整 Spring 容器可以加载知识库与诊断工作流组件。
      */
     @Test
     void contextLoads() {
@@ -38,6 +38,18 @@ class RootSightApplicationTests {
         assertThat(environment.getProperty("spring.ai.openai.embedding.model"))
                 .isEqualTo("BAAI/bge-m3")
                 .doesNotStartWith("Pro/");
+    }
+
+    /**
+     * 验证 Stage 6 默认启用有限总时限和 Tool 调用预算。
+     */
+    @Test
+    void shouldLoadControlledWorkflowDefaults() {
+        assertThat(environment.getProperty("rootsight.diagnosis.workflow.timeout"))
+                .isEqualTo("90s");
+        assertThat(environment.getProperty(
+                "rootsight.diagnosis.workflow.max-tool-calls", Integer.class
+        )).isEqualTo(8);
     }
 
 }

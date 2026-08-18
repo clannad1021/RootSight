@@ -37,7 +37,9 @@ public class DiagnosisController {
                 .map(event -> ServerSentEvent.<DiagnosisResponse>builder()
                         //使用 Locale.ROOT 是为了让大小写转换不受服务器操作系统语言环境影响，保证结果稳定
                         .event(event.type().name().toLowerCase(Locale.ROOT))
-                        .data(new DiagnosisResponse(event.type(), event.content(), event.toolCalls()))
+                        .data(new DiagnosisResponse(
+                                event.type(), event.content(), event.toolCalls(), event.workflow()
+                        ))
                         .build());
     }
 }

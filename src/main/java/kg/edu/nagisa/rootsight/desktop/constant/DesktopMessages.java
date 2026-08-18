@@ -10,6 +10,9 @@ public class DesktopMessages {
 
     public static final String READY = "等待诊断任务";
     public static final String RUNNING = "Agent 正在流式诊断…";
+    public static final String PLANNING = "Agent 正在规划诊断…";
+    public static final String COLLECTING_EVIDENCE = "Agent 正在收集证据…";
+    public static final String SYNTHESIZING = "Agent 正在归纳诊断结论…";
     public static final String EMPTY_QUESTION = "请先描述需要诊断的故障现象";
     public static final String EMPTY_RESULT = "诊断完成后，Agent 的结论会显示在这里。";
     public static final String EMPTY_TRACE = "尚未调用 Tool";
@@ -18,6 +21,22 @@ public class DesktopMessages {
     public static final String SETTINGS_LOAD_FAILED = "设置窗口加载失败";
     public static final String UNKNOWN_FAILURE = "发生未知错误，请查看应用日志";
     public static final String MAIN_ART_MISSING = "Desktop main art is missing";
+
+    /**
+     * 根据工作流状态返回适合桌面状态栏展示的简短说明。
+     */
+    public static String workflowState(kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowState state) {
+        if (state == null) {
+            return RUNNING;
+        }
+        return switch (state) {
+            case PLANNING -> PLANNING;
+            case EVIDENCE_COLLECTION -> COLLECTING_EVIDENCE;
+            case SYNTHESIS -> SYNTHESIZING;
+            case COMPLETED -> FINISHED;
+            case FAILED, TIMED_OUT, TOOL_LIMIT_REACHED -> FAILED;
+        };
+    }
 
     /**
      * 生成统一的 FXML 资源缺失消息。

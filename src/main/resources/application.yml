@@ -65,6 +65,12 @@ spring:
         initialize-schema: false
 
 rootsight:
+  diagnosis:
+    workflow:
+      # 总时限覆盖模型思考、全部 Tool 取证和最终报告生成，不是单次网络读取超时。
+      timeout: ${ROOTSIGHT_DIAGNOSIS_TIMEOUT:90s}
+      # 该预算在每个真实 Tool 执行前原子预占，防止模型重复取证形成无界循环。
+      max-tool-calls: ${ROOTSIGHT_DIAGNOSIS_MAX_TOOL_CALLS:8}
   target:
     # 当前进程连接的一组基础设施使用一个逻辑名称，后续可演进为多目标配置。
     name: ${ROOTSIGHT_TARGET_NAME:default-target}

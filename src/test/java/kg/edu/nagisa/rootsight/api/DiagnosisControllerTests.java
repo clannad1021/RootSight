@@ -3,6 +3,8 @@ package kg.edu.nagisa.rootsight.api;
 import kg.edu.nagisa.rootsight.agent.DiagnosisService;
 import kg.edu.nagisa.rootsight.agent.model.DiagnosisStreamEvent;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
+import kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowSnapshot;
+import kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowState;
 import kg.edu.nagisa.rootsight.common.constant.ExceptionMessages;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,9 @@ class DiagnosisControllerTests {
     void shouldStreamModelAnswerAndToolTrace() throws Exception {
         given(diagnosisService.diagnoseStream("订单服务为什么变慢了？"))
                 .willReturn(Flux.just(
+                        DiagnosisStreamEvent.status(new DiagnosisWorkflowSnapshot(
+                                DiagnosisWorkflowState.PLANNING, 0, 8, 1
+                        )),
                         DiagnosisStreamEvent.content("诊断结论：\n"),
                         DiagnosisStreamEvent.content("Redis 不可用导致延迟升高。"),
                         DiagnosisStreamEvent.completed(List.of(
@@ -59,8 +64,10 @@ class DiagnosisControllerTests {
         MvcResult streamedResult = mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(content().string(containsString("event:status")))
                 .andExpect(content().string(containsString("event:content")))
                 .andExpect(content().string(containsString("event:completed")))
+                .andExpect(content().string(containsString("\"state\":\"PLANNING\"")))
                 .andExpect(content().string(containsString("check_redis_health")))
                 .andReturn();
 

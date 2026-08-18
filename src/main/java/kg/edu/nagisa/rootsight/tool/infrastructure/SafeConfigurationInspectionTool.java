@@ -1,6 +1,7 @@
 package kg.edu.nagisa.rootsight.tool.infrastructure;
 
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
+import kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowCoordinator;
 import kg.edu.nagisa.rootsight.config.InfrastructureTargetProperties;
 import kg.edu.nagisa.rootsight.config.LokiProperties;
 import kg.edu.nagisa.rootsight.config.KnowledgeProperties;
@@ -37,6 +38,7 @@ public class SafeConfigurationInspectionTool {
     private final PrometheusProperties prometheusProperties;
     private final KnowledgeProperties knowledgeProperties;
     private final ToolCallTraceRecorder traceRecorder;
+    private final DiagnosisWorkflowCoordinator workflowCoordinator;
 
     /**
      * 返回源码固定的安全配置摘要，帮助 Agent 理解当前诊断目标和能力边界。
@@ -44,6 +46,7 @@ public class SafeConfigurationInspectionTool {
     @Tool(name = "inspect_safe_configuration",
             description = "读取当前 RootSight 实例的固定非敏感配置摘要，包括逻辑目标、应用名、模型名、服务端口、中间件范围、知识系统和可用只读 Tool。不能查询密码、密钥、用户名、连接 URL 或任意环境变量。")
     public SafeConfigurationEvidence inspectSafeConfiguration(ToolContext toolContext) {
+        workflowCoordinator.beforeToolCall(toolContext);
         SafeConfigurationEvidence evidence = new SafeConfigurationEvidence(
                 "REAL",
                 targetProperties.name(),

@@ -1,6 +1,7 @@
 package kg.edu.nagisa.rootsight.tool.infrastructure;
 
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
+import kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowCoordinator;
 import kg.edu.nagisa.rootsight.infrastructure.loki.LokiLogClient;
 import kg.edu.nagisa.rootsight.tool.evidence.LokiLogEvidence;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class LokiLogInspectionTool {
 
     private final LokiLogClient lokiLogClient;
     private final ToolCallTraceRecorder traceRecorder;
+    private final DiagnosisWorkflowCoordinator workflowCoordinator;
 
     /**
      * 查询目标服务的 ERROR/WARN 日志，支持故障时间锚点、有限文本过滤和后端自动扩窗。
@@ -41,6 +43,7 @@ public class LokiLogInspectionTool {
                     description = "可选返回数量；后端会强制限制在安全上限以内")
             Integer limit,
             ToolContext toolContext) {
+        workflowCoordinator.beforeToolCall(toolContext);
         LokiLogEvidence evidence = lokiLogClient.queryLogs(
                 targetService, incidentTime, keyword, traceId, limit
         );

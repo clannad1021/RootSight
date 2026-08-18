@@ -2,11 +2,14 @@ package kg.edu.nagisa.rootsight.tool.infrastructure;
 
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTrace;
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
+import kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowCoordinator;
+import kg.edu.nagisa.rootsight.config.DiagnosisWorkflowProperties;
 import kg.edu.nagisa.rootsight.config.InfrastructureTargetProperties;
 import kg.edu.nagisa.rootsight.config.LokiProperties;
 import kg.edu.nagisa.rootsight.config.KnowledgeProperties;
 import kg.edu.nagisa.rootsight.config.PrometheusProperties;
 import kg.edu.nagisa.rootsight.config.RabbitMqManagementProperties;
+import kg.edu.nagisa.rootsight.common.constant.ExceptionMessages;
 import kg.edu.nagisa.rootsight.infrastructure.loki.LokiLogClient;
 import kg.edu.nagisa.rootsight.infrastructure.mysql.MySqlStatusClient;
 import kg.edu.nagisa.rootsight.infrastructure.prometheus.PrometheusMetricsClient;
@@ -34,8 +37,10 @@ import org.springframework.mock.env.MockEnvironment;
 import org.springframework.util.unit.DataSize;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 验证真实基础设施 Tool 会原样返回客户端证据并留下可审计轨迹。
@@ -43,6 +48,7 @@ import static org.mockito.Mockito.mock;
 class InfrastructureInspectionToolsTests {
 
     private ToolCallTraceRecorder traceRecorder;
+    private DiagnosisWorkflowCoordinator workflowCoordinator;
     private String diagnosisId;
     private ToolContext toolContext;
 
@@ -50,6 +56,10 @@ class InfrastructureInspectionToolsTests {
     void setUp() {
         traceRecorder = new ToolCallTraceRecorder();
         diagnosisId = traceRecorder.start();
+        workflowCoordinator = new DiagnosisWorkflowCoordinator(
+                new DiagnosisWorkflowProperties(Duration.ofSeconds(30), 20)
+        );
+        workflowCoordinator.start(diagnosisId);
         toolContext = new ToolContext(Map.of(
                 ToolCallTraceRecorder.DIAGNOSIS_ID_CONTEXT_KEY,
                 diagnosisId
@@ -66,7 +76,8 @@ class InfrastructureInspectionToolsTests {
         );
         given(client.inspectStatus()).willReturn(expected);
 
-        RedisStatusEvidence actual = new RedisInspectionTool(client, traceRecorder).inspectRedisStatus(toolContext);
+        RedisStatusEvidence actual = new RedisInspectionTool(client, traceRecorder, workflowCoordinator)
+                .inspectRedisStatus(toolContext);
 
         assertThat(actual).isEqualTo(expected);
         assertThat(toolNames()).containsExactly("inspect_redis_status");
@@ -84,7 +95,8 @@ class InfrastructureInspectionToolsTests {
         );
         given(client.inspectStatus()).willReturn(expected);
 
-        MySqlStatusEvidence actual = new MySqlInspectionTool(client, traceRecorder).inspectMySqlStatus(toolContext);
+        MySqlStatusEvidence actual = new MySqlInspectionTool(client, traceRecorder, workflowCoordinator)
+                .inspectMySqlStatus(toolContext);
 
         assertThat(actual).isEqualTo(expected);
         assertThat(toolNames()).containsExactly("inspect_mysql_status");
@@ -106,7 +118,8 @@ class InfrastructureInspectionToolsTests {
         given(client.inspectStatus()).willReturn(expected);
 
         RabbitMqStatusEvidence actual =
-                new RabbitMqInspectionTool(client, traceRecorder).inspectRabbitMqStatus(toolContext);
+                new RabbitMqInspectionTool(client, traceRecorder, workflowCoordinator)
+                        .inspectRabbitMqStatus(toolContext);
 
         assertThat(actual).isEqualTo(expected);
         assertThat(toolNames()).containsExactly("inspect_rabbitmq_status");
@@ -133,7 +146,7 @@ class InfrastructureInspectionToolsTests {
         LokiProperties loki = lokiProperties();
         SafeConfigurationInspectionTool tool = new SafeConfigurationInspectionTool(
                 environment, target, rabbit, loki, prometheusProperties(),
-                knowledgeProperties(), traceRecorder
+                knowledgeProperties(), traceRecorder, workflowCoordinator
         );
 
         SafeConfigurationEvidence evidence = tool.inspectSafeConfiguration(toolContext);
@@ -166,7 +179,7 @@ class InfrastructureInspectionToolsTests {
         );
         given(client.queryLogs(null, null, "timeout", null, 20)).willReturn(expected);
 
-        LokiLogEvidence actual = new LokiLogInspectionTool(client, traceRecorder)
+        LokiLogEvidence actual = new LokiLogInspectionTool(client, traceRecorder, workflowCoordinator)
                 .queryApplicationLogs(null, null, "timeout", null, 20, toolContext);
 
         assertThat(actual).isEqualTo(expected);
@@ -189,7 +202,9 @@ class InfrastructureInspectionToolsTests {
         );
         given(client.queryMetrics(null, null, "5m")).willReturn(expected);
 
-        PrometheusMetricsEvidence actual = new PrometheusMetricsInspectionTool(client, traceRecorder)
+        PrometheusMetricsEvidence actual = new PrometheusMetricsInspectionTool(
+                client, traceRecorder, workflowCoordinator
+        )
                 .queryServiceHttpMetrics(null, null, "5m", toolContext);
 
         assertThat(actual).isEqualTo(expected);
@@ -214,13 +229,36 @@ class InfrastructureInspectionToolsTests {
         );
         given(service.search("Redis 为什么故障开放", 3)).willReturn(expected);
 
-        KnowledgeSearchEvidence actual = new KnowledgeInspectionTool(service, traceRecorder)
+        KnowledgeSearchEvidence actual = new KnowledgeInspectionTool(
+                service, traceRecorder, workflowCoordinator
+        )
                 .searchOperationalKnowledge("Redis 为什么故障开放", 3, toolContext);
 
         assertThat(actual).isEqualTo(expected);
         assertThat(toolNames()).containsExactly("search_operational_knowledge");
         assertThat(traceRecorder.snapshot(diagnosisId).get(0).summary())
                 .contains("[REAL-KNOWLEDGE]", "命中=1");
+    }
+
+    /**
+     * 验证预算用尽后会在基础设施客户端执行前拒绝 Tool 调用。
+     */
+    @Test
+    void shouldRejectToolBeforeExternalClientWhenBudgetIsExhausted() {
+        DiagnosisWorkflowCoordinator limitedCoordinator = new DiagnosisWorkflowCoordinator(
+                new DiagnosisWorkflowProperties(Duration.ofSeconds(30), 1)
+        );
+        limitedCoordinator.start(diagnosisId);
+        limitedCoordinator.beforeToolCall(toolContext);
+        MySqlStatusClient client = mock(MySqlStatusClient.class);
+        MySqlInspectionTool tool = new MySqlInspectionTool(
+                client, traceRecorder, limitedCoordinator
+        );
+
+        assertThatThrownBy(() -> tool.inspectMySqlStatus(toolContext))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage(ExceptionMessages.DIAGNOSIS_TOOL_LIMIT_REACHED);
+        verifyNoInteractions(client);
     }
 
     /**

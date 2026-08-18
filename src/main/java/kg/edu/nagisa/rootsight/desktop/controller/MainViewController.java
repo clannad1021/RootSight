@@ -147,6 +147,9 @@ public class MainViewController {
      */
     private void renderStreamEvent(DiagnosisStreamEvent event) {
         switch (event.type()) {
+            case STATUS -> statusLabel.setText(DesktopMessages.workflowState(
+                    event.workflow() == null ? null : event.workflow().state()
+            ));
             case CONTENT -> answerOutput.appendText(event.content());
             case COMPLETED -> finishDiagnosis(event.toolCalls());
             case ERROR -> failDiagnosis(event.content(), event.toolCalls());

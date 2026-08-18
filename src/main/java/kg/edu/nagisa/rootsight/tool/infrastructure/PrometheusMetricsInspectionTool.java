@@ -1,6 +1,7 @@
 package kg.edu.nagisa.rootsight.tool.infrastructure;
 
 import kg.edu.nagisa.rootsight.agent.trace.ToolCallTraceRecorder;
+import kg.edu.nagisa.rootsight.agent.workflow.DiagnosisWorkflowCoordinator;
 import kg.edu.nagisa.rootsight.infrastructure.prometheus.PrometheusMetricsClient;
 import kg.edu.nagisa.rootsight.tool.evidence.PrometheusMetricsEvidence;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class PrometheusMetricsInspectionTool {
 
     private final PrometheusMetricsClient prometheusMetricsClient;
     private final ToolCallTraceRecorder traceRecorder;
+    private final DiagnosisWorkflowCoordinator workflowCoordinator;
 
     /**
      * 查询目标服务的可用性、HTTP 流量与延迟、进程 CPU 和 JVM 资源指标。
@@ -35,6 +37,7 @@ public class PrometheusMetricsInspectionTool {
                     description = "可选统计窗口，仅允许 1m、5m、15m、30m 或 1h")
             String window,
             ToolContext toolContext) {
+        workflowCoordinator.beforeToolCall(toolContext);
         PrometheusMetricsEvidence evidence = prometheusMetricsClient.queryMetrics(
                 targetService, incidentTime, window
         );
